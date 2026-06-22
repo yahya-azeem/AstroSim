@@ -35,8 +35,8 @@ jobs:
 
       - name: Build WASM Library
         run: |
-          export CC=emcc
-          export CXX=em++
+          export CFLAGS="-I$EMSDK/upstream/emscripten/cache/sysroot/include"
+          export CXXFLAGS="-I$EMSDK/upstream/emscripten/cache/sysroot/include -I$EMSDK/upstream/emscripten/cache/sysroot/include/c++/v1"
           cargo build --lib --target wasm32-unknown-unknown --release
 
       - name: Run wasm-bindgen
