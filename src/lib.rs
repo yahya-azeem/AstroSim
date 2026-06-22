@@ -1,6 +1,7 @@
 pub mod app;
 pub mod physics;
 pub mod render;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod ephemeris;
 
 #[cfg(target_arch = "wasm32")]
