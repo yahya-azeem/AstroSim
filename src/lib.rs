@@ -112,7 +112,7 @@ async fn run_web_app() -> Result<(), String> {
 
     log::info!("WebGPU initialization successful. Starting render loop...");
 
-    use winit::platform::web::event_loop::EventLoopExtWebSys;
+    use winit::platform::web::EventLoopExtWebSys;
     event_loop.spawn(move |event, elwt| {
         elwt.set_control_flow(ControlFlow::Poll);
 
