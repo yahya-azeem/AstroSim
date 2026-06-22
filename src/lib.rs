@@ -31,9 +31,9 @@ pub fn start() {
 async fn run_web_app() -> Result<(), String> {
     // Create the event loop and initialize winit window
     let event_loop = EventLoop::new().map_err(|e| e.to_string())?;
-    let window = WindowBuilder::new()
+    let window = std::sync::Arc::new(WindowBuilder::new()
         .with_title("AstroSim Browser Port")
-        .build(&event_loop).map_err(|e| e.to_string())?;
+        .build(&event_loop).map_err(|e| e.to_string())?);
 
     // Query Document and Window from web-sys
     let web_window = web_sys::window().ok_or("No global window found")?;
@@ -68,8 +68,8 @@ async fn run_web_app() -> Result<(), String> {
     // WebGPU Initialization
     let instance = wgpu::Instance::default();
     
-    // Create rendering surface from window canvas
-    let surface = unsafe { instance.create_surface(&window) }.map_err(|e| e.to_string())?;
+    // Create rendering surface from window canvas (pass owned Arc clone to avoid lifetime borrow issues)
+    let surface = instance.create_surface(window.clone()).map_err(|e| e.to_string())?;
 
     // Request graphics adapter
     let adapter = instance
