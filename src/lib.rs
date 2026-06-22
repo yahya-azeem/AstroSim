@@ -51,9 +51,7 @@ pub unsafe extern "C" fn malloc(size: usize) -> *mut u8 {
     }
     unsafe {
         *(ptr as *mut usize) = size;
-        let res = ptr.add(HEADER_SIZE);
-        log(&format!("malloc({}) -> {:?}", size, res));
-        res
+        ptr.add(HEADER_SIZE)
     }
 }
 
@@ -66,7 +64,6 @@ pub unsafe extern "C" fn free(ptr: *mut u8) {
     unsafe {
         let real_ptr = ptr.sub(HEADER_SIZE);
         let size = *(real_ptr as *const usize);
-        log(&format!("free({:?}) size={}", ptr, size));
         let layout = Layout::from_size_align_unchecked(size + HEADER_SIZE, ALIGNMENT);
         dealloc(real_ptr, layout);
     }
@@ -92,9 +89,7 @@ pub unsafe extern "C" fn realloc(ptr: *mut u8, new_size: usize) -> *mut u8 {
             return std::ptr::null_mut();
         }
         *(new_real_ptr as *mut usize) = new_size;
-        let res = new_real_ptr.add(HEADER_SIZE);
-        log(&format!("realloc({:?}, {}) -> {:?}", ptr, new_size, res));
-        res
+        new_real_ptr.add(HEADER_SIZE)
     }
 }
 
