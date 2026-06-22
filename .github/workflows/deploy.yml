@@ -30,8 +30,14 @@ jobs:
       - name: Install wasm-bindgen-cli
         uses: taiki-e/install-action@wasm-bindgen-cli
 
+      - name: Setup Emscripten SDK
+        uses: mymindstorm/setup-emsdk@v14
+
       - name: Build WASM Library
-        run: cargo build --lib --target wasm32-unknown-unknown --release
+        run: |
+          export CC=emcc
+          export CXX=em++
+          cargo build --lib --target wasm32-unknown-unknown --release
 
       - name: Run wasm-bindgen
         run: wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/AstroSim.wasm
