@@ -176,7 +176,7 @@ fn vs_grid(@location(0) in_pos: vec2<f32>) -> GridOutput {
     }
     let pos = vec3<f32>(in_pos.x, depth, in_pos.y);
     var out: GridOutput;
-    out.position = ubo.proj * ubo.view * ubo.model * vec4<f32>(pos, 1.0);
+    out.position = ubo.proj * ubo.view * vec4<f32>(pos, 1.0);
     out.uv = in_pos * 0.1;
     out.height = depth;
     return out;
@@ -209,7 +209,7 @@ fn vs_orbit(@location(0) in_pos: vec2<f32>) -> OrbitOutput {
     }
     let pos = vec3<f32>(in_pos.x, depth, in_pos.y);
     var out: OrbitOutput;
-    out.position = ubo.proj * ubo.view * push.model * vec4<f32>(pos, 1.0);
+    out.position = ubo.proj * ubo.view * vec4<f32>(pos, 1.0);
     out.height = depth;
     return out;
 }
@@ -634,7 +634,7 @@ impl Renderer {
         });
 
         // 3. Generate Static Meshes
-        let grid_verts = generate_grid_vertices(25.0, 50, 4);
+        let grid_verts = generate_grid_vertices(40.0, 100, 140);
         let grid_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Grid Vertex Buffer"),
             contents: bytemuck::cast_slice(&grid_verts),
@@ -870,14 +870,22 @@ impl Renderer {
         let sphere_slot_start = push_slots.len();
         for i in 0..num_bodies {
             let p = bodies[i].pos_mass;
-            let visual_radius = body_radii[i];
+            let radius = body_radii[i];
+            
+            let dx = p[0] - camera_pos[0];
+            let dy = p[1] - camera_pos[1];
+            let dz = p[2] - camera_pos[2];
+            let dist = (dx*dx + dy*dy + dz*dz).sqrt();
+            
+            let b_type = body_types[i];
+            let min_size_factor = if b_type == 0 || b_type == 100 { 0.006 } else { 0.0025 };
+            let visual_radius = radius.max(dist * min_size_factor);
             
             let scale = nalgebra::Matrix4::new_scaling(visual_radius);
             let translation = nalgebra::Matrix4::new_translation(&Vector3::new(p[0], p[1], p[2]));
             let model = translation * scale;
             
             let is_selected = if i == selected_body_idx || Some(i) == hovered_body_idx { 1u32 } else { 0u32 };
-            let b_type = body_types[i];
 
             push_slots.push(PushConstants {
                 model: model.into(),
@@ -895,7 +903,17 @@ impl Renderer {
             if body_types[i] == 6 {
                 has_saturn_rings = true;
                 let p = bodies[i].pos_mass;
-                let visual_radius = body_radii[i];
+                let radius = body_radii[i];
+                
+                let dx = p[0] - camera_pos[0];
+                let dy = p[1] - camera_pos[1];
+                let dz = p[2] - camera_pos[2];
+                let dist = (dx*dx + dy*dy + dz*dz).sqrt();
+                
+                let b_type = body_types[i];
+                let min_size_factor = if b_type == 0 || b_type == 100 { 0.006 } else { 0.0025 };
+                let visual_radius = radius.max(dist * min_size_factor);
+                
                 let scale = nalgebra::Matrix4::new_scaling(visual_radius);
                 let translation = nalgebra::Matrix4::new_translation(&Vector3::new(p[0], p[1], p[2]));
                 saturn_model = (translation * scale).into();
