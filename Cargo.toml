@@ -38,7 +38,7 @@ imgui = "0.12.0"
 
 # Desktop target dependencies for Windows and other non-Linux environments
 [target.'cfg(all(not(target_arch = "wasm32"), not(target_os = "linux")))'.dependencies]
-sdl2 = { version = "0.37", features = ["bundled"] }
+sdl2 = { version = "0.37" }
 ash = "0.38"
 cudarc = { version = "0.12", features = ["driver", "nvrtc", "cuda-12020"] }
 imgui-sdl2-support = "0.13.0"
