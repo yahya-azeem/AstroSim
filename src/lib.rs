@@ -112,7 +112,8 @@ async fn run_web_app() -> Result<(), String> {
 
     log::info!("WebGPU initialization successful. Starting render loop...");
 
-    event_loop.run(move |event, elwt| {
+    use winit::platform::web::event_loop::EventLoopExtWebSys;
+    event_loop.spawn(move |event, elwt| {
         elwt.set_control_flow(ControlFlow::Poll);
 
         match event {
@@ -172,7 +173,7 @@ async fn run_web_app() -> Result<(), String> {
             }
             _ => {}
         }
-    }).map_err(|e| e.to_string())?;
+    });
 
     Ok(())
 }
