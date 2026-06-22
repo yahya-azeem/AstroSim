@@ -50,21 +50,51 @@
     </div>
 
     <script type="module">
-        import init from './pkg/AstroSim.js';
+        import init, { start_simulation } from './pkg/AstroSim.js';
         
         async function run() {
             try {
-                // Initialize the WASM module. The #[wasm_bindgen(start)] function
-                // will automatically run, mounting the canvas and starting the rendering.
                 await init();
-                console.log("AstroSim WASM module loaded and started.");
+                console.log("AstroSim WASM module loaded.");
+                await start_simulation();
+                console.log("AstroSim simulation started successfully.");
             } catch (err) {
-                console.error("Error loading AstroSim WASM:", err);
+                console.error("Error loading/starting AstroSim:", err);
                 const container = document.getElementById("app-container");
-                const errorMsg = document.createElement("p");
-                errorMsg.style.color = "#ef4444";
-                errorMsg.innerText = "Error loading WebGPU simulation: " + err.message;
-                container.appendChild(errorMsg);
+                
+                // Remove the canvas if it was created/attached
+                const canvas = document.getElementById("astrosim-canvas");
+                if (canvas) canvas.remove();
+                
+                const errorDiv = document.createElement("div");
+                errorDiv.style.color = "#fca5a5";
+                errorDiv.style.backgroundColor = "rgba(239, 68, 68, 0.1)";
+                errorDiv.style.border = "1px solid #ef4444";
+                errorDiv.style.padding = "20px";
+                errorDiv.style.borderRadius = "12px";
+                errorDiv.style.marginTop = "20px";
+                errorDiv.style.maxWidth = "600px";
+                errorDiv.style.textAlign = "center";
+                errorDiv.style.boxShadow = "0 10px 15px -3px rgba(0, 0, 0, 0.3)";
+                
+                const title = document.createElement("h3");
+                title.style.margin = "0 0 10px 0";
+                title.style.fontSize = "1.2rem";
+                title.style.fontWeight = "600";
+                title.innerText = "Simulation Initialization Failed";
+                errorDiv.appendChild(title);
+                
+                const p = document.createElement("p");
+                p.style.margin = "0";
+                p.style.fontSize = "0.95rem";
+                p.style.lineHeight = "1.5";
+                
+                let msg = err;
+                if (err && err.message) msg = err.message;
+                p.innerText = msg + ". Please ensure your browser supports WebGPU or WebGL2. On Linux, you might need to enable experimental flags (such as 'enable-unsafe-webgpu' in chrome://flags) or run on a supported browser.";
+                errorDiv.appendChild(p);
+                
+                container.appendChild(errorDiv);
             }
         }
         

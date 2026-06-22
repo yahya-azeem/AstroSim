@@ -11,61 +11,32 @@ permissions:
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    env:
-      CMAKE_POLICY_VERSION_MINIMUM: "3.5"
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            artifact_name: AstroSim-linux.zip
-            binary_path: target/release/AstroSim
-          - os: windows-latest
-            artifact_name: AstroSim-windows.zip
-            binary_path: target/release/AstroSim.exe
-
+    name: Build Linux Release
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install System Dependencies (Linux)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Install System Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libsdl2-dev libvulkan-dev pkg-config
-
-      - name: Setup SDL2 (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: libsdl-org/setup-sdl@v1
-        with:
-          version: 2-latest
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build Binary
         run: cargo build --bin AstroSim --release
-        env:
-          SDL2_DIR: ${{ env.SDL2_ROOT }}
-          RUSTFLAGS: -L ${{ env.SDL2_ROOT }}/lib
 
-      - name: Package Asset (Linux)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Package Asset
         run: |
-          zip -j ${{ matrix.artifact_name }} ${{ matrix.binary_path }}
-
-      - name: Package Asset (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          copy "$env:SDL2_DIR\bin\SDL2.dll" target\release\
-          powershell Compress-Archive -Path target\release\AstroSim.exe, target\release\SDL2.dll -DestinationPath ${{ matrix.artifact_name }}
+          zip -j AstroSim-linux.zip target/release/AstroSim
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_name }}
+          name: AstroSim-linux.zip
+          path: AstroSim-linux.zip
 
   release:
     name: Create GitHub Release
@@ -77,11 +48,6 @@ jobs:
         with:
           name: AstroSim-linux.zip
 
-      - name: Download Windows Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: AstroSim-windows.zip
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -89,6 +55,5 @@ jobs:
           prerelease: ${{ github.ref_type != 'tag' }}
           files: |
             AstroSim-linux.zip
-            AstroSim-windows.zip
           draft: false
           generate_release_notes: true

@@ -11,20 +11,15 @@ use winit::{
 };
 
 #[cfg(target_arch = "wasm32")]
-#[wasm_bindgen(start)]
-pub fn start() {
+#[wasm_bindgen]
+pub async fn start_simulation() -> Result<(), String> {
     // Redirect panic reports and logging outputs to browser console
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-    console_log::init_with_level(log::Level::Info).expect("Failed to initialize console log");
+    let _ = console_log::init_with_level(log::Level::Info);
 
-    log::info!("WebAssembly WebGPU simulation initializing...");
+    log::info!("WebAssembly WebGPU/WebGL2 simulation initializing...");
 
-    // Spawn the async WebGPU and Winit application loop
-    wasm_bindgen_futures::spawn_local(async {
-        if let Err(e) = run_web_app().await {
-            log::error!("Error running WebGPU WASM application: {:?}", e);
-        }
-    });
+    run_web_app().await
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -40,9 +35,11 @@ async fn run_web_app() -> Result<(), String> {
     let document = web_window.document().ok_or("No global document found")?;
     let body = document.body().ok_or("No body element found")?;
 
-    // Create and attach a canvas element for rendering
-    let canvas = document.create_element("canvas").map_err(|e| format!("{:?}", e))?
-        .dyn_into::<web_sys::HtmlCanvasElement>().map_err(|e| format!("{:?}", e))?;
+    // Retrieve the canvas created by winit
+    #[allow(deprecated)]
+    use winit::platform::web::WindowExtWebSys;
+    let canvas = window.canvas().ok_or("Failed to retrieve winit canvas")?;
+    
     canvas.set_id("astrosim-canvas");
     canvas.set_width(1280);
     canvas.set_height(720);
@@ -57,11 +54,6 @@ async fn run_web_app() -> Result<(), String> {
     } else {
         body.append_child(&canvas).map_err(|e| format!("{:?}", e))?;
     }
-
-    // Embed the winit window directly into the canvas using raw-window-handle features
-    #[allow(deprecated)]
-    use winit::platform::web::WindowExtWebSys;
-    let _canvas_assoc = window.canvas(); // Assoc canvas with winit window
 
     log::info!("Web canvas mounted. Initializing WebGPU...");
 
