@@ -41,7 +41,7 @@ jobs:
           ar rcs lib/libstdc++.a empty.o
           export CFLAGS="-I$EMSDK/upstream/emscripten/cache/sysroot/include"
           export CXXFLAGS="-I$EMSDK/upstream/emscripten/cache/sysroot/include -I$EMSDK/upstream/emscripten/cache/sysroot/include/c++/v1"
-          export RUSTFLAGS="-L $EMSDK/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten/ -C link-arg=-lc -L ./lib"
+          export RUSTFLAGS="-L $EMSDK/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten/ -C link-arg=-lc -L ./lib --cfg getrandom_backend=\"wasm_js\""
           cargo build --lib --target wasm32-unknown-unknown --release
 
       - name: Run wasm-bindgen
