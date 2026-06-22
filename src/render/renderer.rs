@@ -83,8 +83,8 @@ fn vs_skybox(@builtin(vertex_index) vertex_index: u32) -> SkyboxOutput {
     }
     var out: SkyboxOutput;
     out.position = vec4<f32>(ndc, 0.9999, 1.0);
-    let target = ubo.inv_view_proj * vec4<f32>(ndc, 1.0, 1.0);
-    out.view_dir = target.xyz / target.w;
+    let target_pos = ubo.inv_view_proj * vec4<f32>(ndc, 1.0, 1.0);
+    out.view_dir = target_pos.xyz / target_pos.w;
     return out;
 }
 
@@ -736,6 +736,7 @@ impl Renderer {
         // 7. Setup ImGui Renderer Config
         let imgui_renderer_config = imgui_wgpu::RendererConfig {
             texture_format: surface_config.format,
+            depth_format: Some(wgpu::TextureFormat::Depth32Float),
             ..imgui_wgpu::RendererConfig::new()
         };
         let imgui_renderer = imgui_wgpu::Renderer::new(imgui_context, &device, &queue, imgui_renderer_config);
