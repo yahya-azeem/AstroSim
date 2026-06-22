@@ -19,19 +19,66 @@ pub extern "C" fn __assert_fail(
 }
 
 #[cfg(target_arch = "wasm32")]
+use std::alloc::{alloc, dealloc, realloc as rust_realloc, Layout};
+
+const ALIGNMENT: usize = 16;
+const HEADER_SIZE: usize = 16;
+
+#[cfg(target_arch = "wasm32")]
 #[unsafe(no_mangle)]
-pub extern "C" fn malloc(_size: usize) -> *mut u8 {
-    std::ptr::null_mut()
+pub unsafe extern "C" fn malloc(size: usize) -> *mut u8 {
+    if size == 0 {
+        return std::ptr::null_mut();
+    }
+    let layout = match Layout::from_size_align(size + HEADER_SIZE, ALIGNMENT) {
+        Ok(l) => l,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    let ptr = unsafe { alloc(layout) };
+    if ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    unsafe {
+        *(ptr as *mut usize) = size;
+        ptr.add(HEADER_SIZE)
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
 #[unsafe(no_mangle)]
-pub extern "C" fn free(_ptr: *mut u8) {}
+pub unsafe extern "C" fn free(ptr: *mut u8) {
+    if ptr.is_null() {
+        return;
+    }
+    unsafe {
+        let real_ptr = ptr.sub(HEADER_SIZE);
+        let size = *(real_ptr as *const usize);
+        let layout = Layout::from_size_align_unchecked(size + HEADER_SIZE, ALIGNMENT);
+        dealloc(real_ptr, layout);
+    }
+}
 
 #[cfg(target_arch = "wasm32")]
 #[unsafe(no_mangle)]
-pub extern "C" fn realloc(_ptr: *mut u8, _size: usize) -> *mut u8 {
-    std::ptr::null_mut()
+pub unsafe extern "C" fn realloc(ptr: *mut u8, new_size: usize) -> *mut u8 {
+    if ptr.is_null() {
+        return unsafe { malloc(new_size) };
+    }
+    if new_size == 0 {
+        unsafe { free(ptr) };
+        return std::ptr::null_mut();
+    }
+    unsafe {
+        let real_ptr = ptr.sub(HEADER_SIZE);
+        let old_size = *(real_ptr as *const usize);
+        let old_layout = Layout::from_size_align_unchecked(old_size + HEADER_SIZE, ALIGNMENT);
+        let new_real_ptr = rust_realloc(real_ptr, old_layout, new_size + HEADER_SIZE);
+        if new_real_ptr.is_null() {
+            return std::ptr::null_mut();
+        }
+        *(new_real_ptr as *mut usize) = new_size;
+        new_real_ptr.add(HEADER_SIZE)
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
