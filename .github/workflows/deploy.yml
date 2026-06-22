@@ -54,6 +54,7 @@ jobs:
         run: |
           mkdir -p dist
           cp index.html dist/
+          cp wasi.js dist/
           cp -r pkg dist/
 
       - name: Upload Artifact

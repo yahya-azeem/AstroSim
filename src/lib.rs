@@ -53,6 +53,30 @@ pub extern "C" fn __syscall_openat(_dirfd: i32, _pathname: *const u8, _flags: i3
 }
 
 #[cfg(target_arch = "wasm32")]
+#[unsafe(no_mangle)]
+pub extern "C" fn fd_write(_fd: i32, _iovs: i32, _iovs_len: i32, _nwritten: i32) -> i32 {
+    0
+}
+
+#[cfg(target_arch = "wasm32")]
+#[unsafe(no_mangle)]
+pub extern "C" fn fd_read(_fd: i32, _iovs: i32, _iovs_len: i32, _nread: i32) -> i32 {
+    0
+}
+
+#[cfg(target_arch = "wasm32")]
+#[unsafe(no_mangle)]
+pub extern "C" fn fd_seek(_fd: i32, _offset: i64, _whence: i32, _newoffset: i32) -> i32 {
+    0
+}
+
+#[cfg(target_arch = "wasm32")]
+#[unsafe(no_mangle)]
+pub extern "C" fn fd_close(_fd: i32) -> i32 {
+    0
+}
+
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn start_simulation() -> Result<(), String> {
     // Redirect panic reports and logging outputs to browser console
