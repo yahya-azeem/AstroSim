@@ -28,12 +28,12 @@ pub fn start() {
 }
 
 #[cfg(target_arch = "wasm32")]
-async fn run_web_app() -> Result<(), Box<dyn std::error::Error>> {
+async fn run_web_app() -> Result<(), String> {
     // Create the event loop and initialize winit window
-    let event_loop = EventLoop::new()?;
+    let event_loop = EventLoop::new().map_err(|e| e.to_string())?;
     let window = WindowBuilder::new()
         .with_title("AstroSim Browser Port")
-        .build(&event_loop)?;
+        .build(&event_loop).map_err(|e| e.to_string())?;
 
     // Query Document and Window from web-sys
     let web_window = web_sys::window().ok_or("No global window found")?;
@@ -41,21 +41,21 @@ async fn run_web_app() -> Result<(), Box<dyn std::error::Error>> {
     let body = document.body().ok_or("No body element found")?;
 
     // Create and attach a canvas element for rendering
-    let canvas = document.create_element("canvas")?
-        .dyn_into::<web_sys::HtmlCanvasElement>()?;
+    let canvas = document.create_element("canvas").map_err(|e| format!("{:?}", e))?
+        .dyn_into::<web_sys::HtmlCanvasElement>().map_err(|e| format!("{:?}", e))?;
     canvas.set_id("astrosim-canvas");
     canvas.set_width(1280);
     canvas.set_height(720);
     
     // Add canvas style for full window or responsive display
-    canvas.style().set_property("background-color", "black")?;
-    canvas.style().set_property("display", "block")?;
+    canvas.style().set_property("background-color", "black").map_err(|e| format!("{:?}", e))?;
+    canvas.style().set_property("display", "block").map_err(|e| format!("{:?}", e))?;
 
     // Try to mount canvas to app-container element if present, else fall back to body
     if let Some(container) = document.get_element_by_id("app-container") {
-        container.append_child(&canvas)?;
+        container.append_child(&canvas).map_err(|e| format!("{:?}", e))?;
     } else {
-        body.append_child(&canvas)?;
+        body.append_child(&canvas).map_err(|e| format!("{:?}", e))?;
     }
 
     // Embed the winit window directly into the canvas using raw-window-handle features
@@ -69,7 +69,7 @@ async fn run_web_app() -> Result<(), Box<dyn std::error::Error>> {
     let instance = wgpu::Instance::default();
     
     // Create rendering surface from window canvas
-    let surface = unsafe { instance.create_surface(&window) }?;
+    let surface = unsafe { instance.create_surface(&window) }.map_err(|e| e.to_string())?;
 
     // Request graphics adapter
     let adapter = instance
@@ -91,7 +91,7 @@ async fn run_web_app() -> Result<(), Box<dyn std::error::Error>> {
             },
             None,
         )
-        .await?;
+        .await.map_err(|e| e.to_string())?;
 
     let surface_capabilities = surface.get_capabilities(&adapter);
     let swapchain_format = surface_capabilities.formats[0];
@@ -106,6 +106,7 @@ async fn run_web_app() -> Result<(), Box<dyn std::error::Error>> {
         present_mode: wgpu::PresentMode::Fifo,
         alpha_mode: surface_capabilities.alpha_modes[0],
         view_formats: vec![],
+        desired_maximum_frame_latency: 2,
     };
     surface.configure(&device, &config);
 
@@ -141,12 +142,19 @@ async fn run_web_app() -> Result<(), Box<dyn std::error::Error>> {
                         {
                             let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                                 label: Some("Main Render Pass"),
-                                color_attachments: &[Some(wgpu::LoadOp::Clear(wgpu::Color {
-                                    r: 0.03,
-                                    g: 0.03,
-                                    b: 0.06,
-                                    a: 1.0,
-                                }).ops(wgpu::StoreOp::Store))],
+                                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                    view: &view,
+                                    resolve_target: None,
+                                    ops: wgpu::Operations {
+                                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                                            r: 0.03,
+                                            g: 0.03,
+                                            b: 0.06,
+                                            a: 1.0,
+                                        }),
+                                        store: wgpu::StoreOp::Store,
+                                    },
+                                })],
                                 depth_stencil_attachment: None,
                                 timestamp_writes: None,
                                 occlusion_query_set: None,
@@ -164,7 +172,7 @@ async fn run_web_app() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ => {}
         }
-    })?;
+    }).map_err(|e| e.to_string())?;
 
     Ok(())
 }
