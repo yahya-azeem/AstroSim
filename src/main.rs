@@ -4,13 +4,15 @@ mod render;
 mod ephemeris;
 
 use anyhow::Result;
+use winit::event_loop::EventLoop;
 
 fn main() -> Result<()> {
     env_logger::init();
     println!("Initializing High-Performance Astrophysics Simulator...");
 
-    let mut app = app::App::new()?;
-    app.run()?;
+    let event_loop = EventLoop::new()?;
+    let mut app = app::AstroSimApp::new();
+    event_loop.run_app(&mut app)?;
 
     Ok(())
 }
