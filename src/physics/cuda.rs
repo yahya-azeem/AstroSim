@@ -1,3 +1,5 @@
+#![cfg(not(target_arch = "wasm32"))]
+
 use crate::physics::PhysicsEngine;
 use nalgebra::Vector3;
 use anyhow::{Result, anyhow};

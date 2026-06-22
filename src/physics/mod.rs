@@ -10,5 +10,6 @@ pub trait PhysicsEngine {
     fn clear(&mut self);
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub mod cuda;
 pub mod vulkan_compute;
