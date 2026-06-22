@@ -18,6 +18,7 @@ dependencies = [
  "imgui",
  "imgui-wgpu",
  "imgui-winit-support",
+ "js-sys",
  "libloading",
  "log",
  "nalgebra",

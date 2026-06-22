@@ -35,8 +35,13 @@ jobs:
 
       - name: Build WASM Library
         run: |
+          mkdir -p lib
+          echo "" > empty.c
+          clang --target=wasm32-unknown-unknown -c empty.c -o empty.o
+          ar rcs lib/libstdc++.a empty.o
           export CFLAGS="-I$EMSDK/upstream/emscripten/cache/sysroot/include"
           export CXXFLAGS="-I$EMSDK/upstream/emscripten/cache/sysroot/include -I$EMSDK/upstream/emscripten/cache/sysroot/include/c++/v1"
+          export RUSTFLAGS="-L $EMSDK/upstream/emscripten/cache/sysroot/lib/wasm32-emscripten/ -C link-arg=-lc -L ./lib"
           cargo build --lib --target wasm32-unknown-unknown --release
 
       - name: Run wasm-bindgen

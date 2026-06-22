@@ -8,6 +8,51 @@ pub mod ephemeris;
 use wasm_bindgen::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
+#[unsafe(no_mangle)]
+pub extern "C" fn __assert_fail(
+    _assertion: *const std::os::raw::c_char,
+    _file: *const std::os::raw::c_char,
+    _line: std::os::raw::c_uint,
+    _function: *const std::os::raw::c_char,
+) -> ! {
+    panic!("C++ assertion failed");
+}
+
+#[cfg(target_arch = "wasm32")]
+#[unsafe(no_mangle)]
+pub extern "C" fn malloc(_size: usize) -> *mut u8 {
+    std::ptr::null_mut()
+}
+
+#[cfg(target_arch = "wasm32")]
+#[unsafe(no_mangle)]
+pub extern "C" fn free(_ptr: *mut u8) {}
+
+#[cfg(target_arch = "wasm32")]
+#[unsafe(no_mangle)]
+pub extern "C" fn realloc(_ptr: *mut u8, _size: usize) -> *mut u8 {
+    std::ptr::null_mut()
+}
+
+#[cfg(target_arch = "wasm32")]
+#[unsafe(no_mangle)]
+pub extern "C" fn __syscall_fcntl64(_fd: i32, _cmd: i32, _arg: i32) -> i32 {
+    -1
+}
+
+#[cfg(target_arch = "wasm32")]
+#[unsafe(no_mangle)]
+pub extern "C" fn __syscall_ioctl(_fd: i32, _req: i32, _arg: i32) -> i32 {
+    -1
+}
+
+#[cfg(target_arch = "wasm32")]
+#[unsafe(no_mangle)]
+pub extern "C" fn __syscall_openat(_dirfd: i32, _pathname: *const u8, _flags: i32, _mode: i32) -> i32 {
+    -1
+}
+
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub async fn start_simulation() -> Result<(), String> {
     // Redirect panic reports and logging outputs to browser console
