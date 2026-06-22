@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AstroSim - WebGPU Portal</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #05050b;
+            color: #e2e8f0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #app-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0;
+            background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.05em;
+        }
+
+        /* The canvas itself will be created and styled by the WASM module */
+        canvas {
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <h1>AstroSim WebGPU Browser Port</h1>
+    </div>
+
+    <script type="module">
+        import init from './pkg/AstroSim.js';
+        
+        async function run() {
+            try {
+                // Initialize the WASM module. The #[wasm_bindgen(start)] function
+                // will automatically run, mounting the canvas and starting the rendering.
+                await init();
+                console.log("AstroSim WASM module loaded and started.");
+            } catch (err) {
+                console.error("Error loading AstroSim WASM:", err);
+                const container = document.getElementById("app-container");
+                const errorMsg = document.createElement("p");
+                errorMsg.style.color = "#ef4444";
+                errorMsg.innerText = "Error loading WebGPU simulation: " + err.message;
+                container.appendChild(errorMsg);
+            }
+        }
+        
+        run();
+    </script>
+</body>
+</html>

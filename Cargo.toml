@@ -1,0 +1,46 @@
+[package]
+name = "AstroSim"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anise = "0.9.6"
+hifitime = "4"
+nalgebra = "0.34.2"
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.11"
+hyperdual = "=1.4.0"
+imgui = "0.12.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+wgpu = "0.19"
+winit = { version = "0.29", features = ["rwh_06"] }
+console_error_panic_hook = "0.1"
+console_log = "1.0"
+web-sys = { version = "0.3", features = ["Document", "Window", "HtmlCanvasElement"] }
+
+# Desktop target dependencies for Linux
+[target.'cfg(all(not(target_arch = "wasm32"), target_os = "linux"))'.dependencies]
+sdl2 = { version = "0.37", features = ["use-pkgconfig"] }
+ash = "0.38"
+cudarc = { version = "0.12", features = ["driver", "nvrtc", "cuda-12020"] }
+imgui-sdl2-support = "0.13.0"
+imgui-rs-vulkan-renderer = "1.16.0"
+libloading = "0.8"
+
+# Desktop target dependencies for Windows and other non-Linux environments
+[target.'cfg(all(not(target_arch = "wasm32"), not(target_os = "linux")))'.dependencies]
+sdl2 = { version = "0.37", features = ["bundled"] }
+ash = "0.38"
+cudarc = { version = "0.12", features = ["driver", "nvrtc", "cuda-12020"] }
+imgui-sdl2-support = "0.13.0"
+imgui-rs-vulkan-renderer = "1.16.0"
+libloading = "0.8"
