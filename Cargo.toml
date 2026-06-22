@@ -16,7 +16,6 @@ wgpu = { version = "29.0.3", features = ["webgl"] }
 winit = { version = "0.30.13", features = ["x11", "wayland"] }
 imgui = "0.12.0"
 imgui-wgpu = "0.28.0"
-imgui-winit-support = "0.13.0"
 bytemuck = { version = "1.16", features = ["derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -27,6 +26,7 @@ console_log = "1.0"
 web-sys = { version = "0.3", features = ["Document", "Window", "HtmlCanvasElement", "Response"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+imgui-winit-support = "0.13.0"
 cudarc = { version = "0.12", features = ["driver", "nvrtc", "cuda-12020"] }
 libloading = "0.8"
 pollster = "0.3"

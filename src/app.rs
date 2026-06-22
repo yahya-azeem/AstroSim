@@ -40,6 +40,7 @@ pub struct AppState {
     renderer: Renderer,
     physics_engine: Box<dyn PhysicsEngine>,
     imgui: imgui::Context,
+    #[cfg(not(target_arch = "wasm32"))]
     platform: imgui_winit_support::WinitPlatform,
     camera_yaw: f32,
     camera_pitch: f32,
@@ -62,6 +63,8 @@ pub struct AppState {
     last_time: f64,
     pressed_keys: HashSet<KeyCode>,
     mouse_position: (f32, f32),
+    #[cfg(target_arch = "wasm32")]
+    left_mouse_down: bool,
     right_mouse_down: bool,
     left_click_occurred: bool,
 }
@@ -119,7 +122,9 @@ impl AppState {
         let mut imgui = imgui::Context::create();
         imgui.set_ini_filename(None);
         
+        #[cfg(not(target_arch = "wasm32"))]
         let mut platform = imgui_winit_support::WinitPlatform::init(&mut imgui);
+        #[cfg(not(target_arch = "wasm32"))]
         platform.attach_window(imgui.io_mut(), &window, imgui_winit_support::HiDpiMode::Default);
 
         let renderer = Renderer::new(
@@ -151,6 +156,7 @@ impl AppState {
             renderer,
             physics_engine,
             imgui,
+            #[cfg(not(target_arch = "wasm32"))]
             platform,
             camera_yaw: 0.0,
             camera_pitch: 35.0,
@@ -173,6 +179,8 @@ impl AppState {
             last_time: get_time_seconds(),
             pressed_keys: HashSet::new(),
             mouse_position: (0.0, 0.0),
+            #[cfg(target_arch = "wasm32")]
+            left_mouse_down: false,
             right_mouse_down: false,
             left_click_occurred: false,
         };
@@ -541,6 +549,17 @@ impl AppState {
         let active_system_name = self.active_system_name.clone();
         let mut selected_body_idx = self.selected_body_idx;
         let body_names = self.body_names.clone();
+
+        #[cfg(not(target_arch = "wasm32"))]
+        self.platform.prepare_frame(self.imgui.io_mut(), &self.window).unwrap();
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.imgui.io_mut().display_size = [width as f32, height as f32];
+            self.imgui.io_mut().delta_time = dt as f32;
+            self.imgui.io_mut().mouse_pos = [self.mouse_position.0, self.mouse_position.1];
+            self.imgui.io_mut().mouse_down[0] = self.left_mouse_down;
+            self.imgui.io_mut().mouse_down[1] = self.right_mouse_down;
+        }
 
         {
             let ui = self.imgui.new_frame();
@@ -949,11 +968,67 @@ impl ApplicationHandler for AstroSimApp {
         }
         
         // Pass event to ImGui
-        let winit_event: winit::event::Event<()> = winit::event::Event::WindowEvent {
-            window_id,
-            event: event.clone(),
-        };
-        state.platform.handle_event(state.imgui.io_mut(), &state.window, &winit_event);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let winit_event: winit::event::Event<()> = winit::event::Event::WindowEvent {
+                window_id,
+                event: event.clone(),
+            };
+            state.platform.handle_event(state.imgui.io_mut(), &state.window, &winit_event);
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let io = state.imgui.io_mut();
+            match &event {
+                WindowEvent::CursorMoved { position, .. } => {
+                    io.add_mouse_pos_event([position.x as f32, position.y as f32]);
+                }
+                WindowEvent::MouseInput { state: button_state, button, .. } => {
+                    let pressed = button_state.is_pressed();
+                    let imgui_button = match button {
+                        MouseButton::Left => {
+                            state.left_mouse_down = pressed;
+                            Some(imgui::MouseButton::Left)
+                        }
+                        MouseButton::Right => {
+                            state.right_mouse_down = pressed;
+                            Some(imgui::MouseButton::Right)
+                        }
+                        MouseButton::Middle => Some(imgui::MouseButton::Middle),
+                        _ => None,
+                    };
+                    if let Some(b) = imgui_button {
+                        io.add_mouse_button_event(b, pressed);
+                    }
+                }
+                WindowEvent::MouseWheel { delta, .. } => {
+                    let (x, y) = match delta {
+                        MouseScrollDelta::LineDelta(x, y) => (*x, *y),
+                        MouseScrollDelta::PixelDelta(pos) => (pos.x as f32 / 120.0, pos.y as f32 / 120.0),
+                    };
+                    io.add_mouse_wheel_event([x, y]);
+                }
+                WindowEvent::KeyboardInput { event: key_event, .. } => {
+                    let pressed = key_event.state.is_pressed();
+                    if let PhysicalKey::Code(keycode) = key_event.physical_key {
+                        if let Some(imgui_key) = map_winit_key_to_imgui(keycode) {
+                            io.add_key_event(imgui_key, pressed);
+                        }
+                    }
+                    if pressed {
+                        if let Some(text) = &key_event.text {
+                            for c in text.chars() {
+                                if !c.is_control() {
+                                    io.add_input_character(c);
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
         
         match event {
             WindowEvent::CloseRequested => {
@@ -1434,3 +1509,83 @@ fn fetch_star_system(
         }
     });
 }
+
+#[cfg(target_arch = "wasm32")]
+fn map_winit_key_to_imgui(keycode: KeyCode) -> Option<imgui::Key> {
+    match keycode {
+        KeyCode::ArrowUp => Some(imgui::Key::UpArrow),
+        KeyCode::ArrowDown => Some(imgui::Key::DownArrow),
+        KeyCode::ArrowLeft => Some(imgui::Key::LeftArrow),
+        KeyCode::ArrowRight => Some(imgui::Key::RightArrow),
+        KeyCode::Enter => Some(imgui::Key::Enter),
+        KeyCode::Space => Some(imgui::Key::Space),
+        KeyCode::Backspace => Some(imgui::Key::Backspace),
+        KeyCode::Delete => Some(imgui::Key::Delete),
+        KeyCode::Escape => Some(imgui::Key::Escape),
+        KeyCode::Tab => Some(imgui::Key::Tab),
+        
+        KeyCode::KeyA => Some(imgui::Key::A),
+        KeyCode::KeyB => Some(imgui::Key::B),
+        KeyCode::KeyC => Some(imgui::Key::C),
+        KeyCode::KeyD => Some(imgui::Key::D),
+        KeyCode::KeyE => Some(imgui::Key::E),
+        KeyCode::KeyF => Some(imgui::Key::F),
+        KeyCode::KeyG => Some(imgui::Key::G),
+        KeyCode::KeyH => Some(imgui::Key::H),
+        KeyCode::KeyI => Some(imgui::Key::I),
+        KeyCode::KeyJ => Some(imgui::Key::J),
+        KeyCode::KeyK => Some(imgui::Key::K),
+        KeyCode::KeyL => Some(imgui::Key::L),
+        KeyCode::KeyM => Some(imgui::Key::M),
+        KeyCode::KeyN => Some(imgui::Key::N),
+        KeyCode::KeyO => Some(imgui::Key::O),
+        KeyCode::KeyP => Some(imgui::Key::P),
+        KeyCode::KeyQ => Some(imgui::Key::Q),
+        KeyCode::KeyR => Some(imgui::Key::R),
+        KeyCode::KeyS => Some(imgui::Key::S),
+        KeyCode::KeyT => Some(imgui::Key::T),
+        KeyCode::KeyU => Some(imgui::Key::U),
+        KeyCode::KeyV => Some(imgui::Key::V),
+        KeyCode::KeyW => Some(imgui::Key::W),
+        KeyCode::KeyX => Some(imgui::Key::X),
+        KeyCode::KeyY => Some(imgui::Key::Y),
+        KeyCode::KeyZ => Some(imgui::Key::Z),
+        
+        KeyCode::Digit0 => Some(imgui::Key::Alpha0),
+        KeyCode::Digit1 => Some(imgui::Key::Alpha1),
+        KeyCode::Digit2 => Some(imgui::Key::Alpha2),
+        KeyCode::Digit3 => Some(imgui::Key::Alpha3),
+        KeyCode::Digit4 => Some(imgui::Key::Alpha4),
+        KeyCode::Digit5 => Some(imgui::Key::Alpha5),
+        KeyCode::Digit6 => Some(imgui::Key::Alpha6),
+        KeyCode::Digit7 => Some(imgui::Key::Alpha7),
+        KeyCode::Digit8 => Some(imgui::Key::Alpha8),
+        KeyCode::Digit9 => Some(imgui::Key::Alpha9),
+
+        KeyCode::ShiftLeft => Some(imgui::Key::LeftShift),
+        KeyCode::ShiftRight => Some(imgui::Key::RightShift),
+        KeyCode::ControlLeft => Some(imgui::Key::LeftCtrl),
+        KeyCode::ControlRight => Some(imgui::Key::RightCtrl),
+        KeyCode::AltLeft => Some(imgui::Key::LeftAlt),
+        KeyCode::AltRight => Some(imgui::Key::RightAlt),
+        KeyCode::SuperLeft => Some(imgui::Key::LeftSuper),
+        KeyCode::SuperRight => Some(imgui::Key::RightSuper),
+        KeyCode::Minus => Some(imgui::Key::Minus),
+        KeyCode::Equal => Some(imgui::Key::Equal),
+        KeyCode::BracketLeft => Some(imgui::Key::LeftBracket),
+        KeyCode::BracketRight => Some(imgui::Key::RightBracket),
+        KeyCode::Semicolon => Some(imgui::Key::Semicolon),
+        KeyCode::Quote => Some(imgui::Key::Apostrophe),
+        KeyCode::Comma => Some(imgui::Key::Comma),
+        KeyCode::Period => Some(imgui::Key::Period),
+        KeyCode::Slash => Some(imgui::Key::Slash),
+        KeyCode::Backslash => Some(imgui::Key::Backslash),
+        KeyCode::Backquote => Some(imgui::Key::GraveAccent),
+
+        _ => None,
+    }
+}
+
+
+
+
