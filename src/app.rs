@@ -446,7 +446,7 @@ impl AppState {
 
         let correction = nalgebra::Matrix4::new(
             1.0,  0.0, 0.0, 0.0,
-            0.0, -1.0, 0.0, 0.0,
+            0.0,  1.0, 0.0, 0.0,
             0.0,  0.0, 0.5, 0.5,
             0.0,  0.0, 0.0, 1.0,
         );
@@ -471,7 +471,7 @@ impl AppState {
             let my = self.mouse_position.1;
             
             let x_ndc = (2.0 * mx / width as f32) - 1.0;
-            let y_ndc = (2.0 * my / height as f32) - 1.0;
+            let y_ndc = 1.0 - (2.0 * my / height as f32);
             
             let vp = proj_vk * view;
             if let Some(inv_vp) = vp.try_inverse() {
