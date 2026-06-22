@@ -13,6 +13,8 @@ jobs:
   build:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    env:
+      CMAKE_POLICY_VERSION_MINIMUM: "3.5"
     strategy:
       matrix:
         include:
@@ -73,9 +75,10 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}
+          prerelease: ${{ github.ref_type != 'tag' }}
           files: |
             AstroSim-linux.zip
             AstroSim-windows.zip
           draft: false
-          prerelease: false
           generate_release_notes: true
