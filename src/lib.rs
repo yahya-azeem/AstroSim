@@ -19,6 +19,13 @@ pub extern "C" fn __assert_fail(
 }
 
 #[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
+#[cfg(target_arch = "wasm32")]
 use std::alloc::{alloc, dealloc, realloc as rust_realloc, Layout};
 
 const ALIGNMENT: usize = 16;
@@ -32,15 +39,21 @@ pub unsafe extern "C" fn malloc(size: usize) -> *mut u8 {
     }
     let layout = match Layout::from_size_align(size + HEADER_SIZE, ALIGNMENT) {
         Ok(l) => l,
-        Err(_) => return std::ptr::null_mut(),
+        Err(_) => {
+            log(&format!("malloc({}) -> Layout Error", size));
+            return std::ptr::null_mut();
+        }
     };
     let ptr = unsafe { alloc(layout) };
     if ptr.is_null() {
+        log(&format!("malloc({}) -> Allocation Failed (null)", size));
         return std::ptr::null_mut();
     }
     unsafe {
         *(ptr as *mut usize) = size;
-        ptr.add(HEADER_SIZE)
+        let res = ptr.add(HEADER_SIZE);
+        log(&format!("malloc({}) -> {:?}", size, res));
+        res
     }
 }
 
@@ -53,6 +66,7 @@ pub unsafe extern "C" fn free(ptr: *mut u8) {
     unsafe {
         let real_ptr = ptr.sub(HEADER_SIZE);
         let size = *(real_ptr as *const usize);
+        log(&format!("free({:?}) size={}", ptr, size));
         let layout = Layout::from_size_align_unchecked(size + HEADER_SIZE, ALIGNMENT);
         dealloc(real_ptr, layout);
     }
@@ -74,10 +88,13 @@ pub unsafe extern "C" fn realloc(ptr: *mut u8, new_size: usize) -> *mut u8 {
         let old_layout = Layout::from_size_align_unchecked(old_size + HEADER_SIZE, ALIGNMENT);
         let new_real_ptr = rust_realloc(real_ptr, old_layout, new_size + HEADER_SIZE);
         if new_real_ptr.is_null() {
+            log(&format!("realloc({:?}, {}) -> Reallocation Failed (null)", ptr, new_size));
             return std::ptr::null_mut();
         }
         *(new_real_ptr as *mut usize) = new_size;
-        new_real_ptr.add(HEADER_SIZE)
+        let res = new_real_ptr.add(HEADER_SIZE);
+        log(&format!("realloc({:?}, {}) -> {:?}", ptr, new_size, res));
+        res
     }
 }
 
