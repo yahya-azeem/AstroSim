@@ -131,7 +131,34 @@ fn fbm(p_in: vec3<f32>) -> f32 {
 @fragment
 fn fs_skybox(in: SkyboxOutput) -> @location(0) vec4<f32> {
     let dir = normalize(in.view_dir);
-    let star_grid = dir * 250.0;
+    
+    // Extract camera position
+    let R = mat3x3<f32>(ubo.view[0].xyz, ubo.view[1].xyz, ubo.view[2].xyz);
+    let cam_pos = transpose(R) * -ubo.view[3].xyz;
+    
+    // Calculate Gravitational Lensing (General Relativity) deflection
+    var deflection_total = vec3<f32>(0.0);
+    for (var i = 0; i < ubo.num_bodies; i = i + 1) {
+        let body_pos = ubo.bodies_pos_mass[i].xyz;
+        let strength = ubo.bodies_pos_mass[i].w;
+        
+        let to_body = body_pos - cam_pos;
+        let t = dot(to_body, dir);
+        if (t > 0.0) {
+            let projection = cam_pos + dir * t;
+            let b_vec = projection - body_pos;
+            let b = length(b_vec);
+            // Deflection scales with mass (strength) and inversely with impact parameter b
+            let deflection_amplitude = (strength * 0.003) / (b + 0.005);
+            let b_len = length(b_vec);
+            if (b_len > 1e-6) {
+                deflection_total = deflection_total + (b_vec / b_len) * deflection_amplitude;
+            }
+        }
+    }
+    let lensed_dir = normalize(dir + deflection_total);
+
+    let star_grid = lensed_dir * 250.0;
     let star_strength = hash(floor(star_grid));
     var star_rgb = vec3<f32>(0.0);
     if (star_strength > 0.994) {
@@ -148,12 +175,10 @@ fn fs_skybox(in: SkyboxOutput) -> @location(0) vec4<f32> {
     }
     
     // Deep space: faint, atmospheric background nebulae and stars
-    let n1 = fbm(dir * 2.5 + vec3<f32>(1.2));
+    let n1 = fbm(lensed_dir * 2.5 + vec3<f32>(1.2));
     let nebula1 = vec3<f32>(0.005, 0.002, 0.01) * n1; // Faint dark cosmic dust
     
     // Calculate God Rays from the Sun (at origin/bodies_pos_mass[0])
-    let R = mat3x3<f32>(ubo.view[0].xyz, ubo.view[1].xyz, ubo.view[2].xyz);
-    let cam_pos = transpose(R) * -ubo.view[3].xyz;
     let sun_dir = normalize(ubo.bodies_pos_mass[0].xyz - cam_pos);
     let cos_theta = dot(dir, sun_dir);
     let d = length(ubo.bodies_pos_mass[0].xyz - cam_pos);
@@ -372,7 +397,7 @@ fn fs_sphere(in: SphereOutput) -> @location(0) vec4<f32> {
     let diff = max(dot(N, L), 0.0);
     let d_au = distance(light_pos, in.world_pos);
     let intensity = clamp(1.5 / (d_au + 0.5), 0.08, 3.0);
-    let ambient = 0.015;
+    let ambient = 0.001;
     var albedo = vec3<f32>(0.8);
     var glow = 0.0;
     var alpha = 1.0;
