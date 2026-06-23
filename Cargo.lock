@@ -18,7 +18,6 @@ dependencies = [
  "hifitime",
  "hyperdual",
  "imgui",
- "imgui-wgpu",
  "imgui-winit-support",
  "js-sys",
  "libloading",
@@ -1421,19 +1420,6 @@ dependencies = [
  "cfg-if",
  "chlorine",
  "mint",
-]
-
-[[package]]
-name = "imgui-wgpu"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff3c0b94f4662fe4aeb3751ccc703189352c8ee9d61bb796fd812faa0e074408"
-dependencies = [
- "bytemuck",
- "imgui",
- "log",
- "smallvec",
- "wgpu",
 ]
 
 [[package]]

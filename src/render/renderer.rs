@@ -333,6 +333,18 @@ fn fs_sphere(in: SphereOutput) -> @location(0) vec4<f32> {
         let opacity = (0.3 + 0.55 * band) * (1.0 - gap1);
         albedo = mix(vec3<f32>(0.65, 0.58, 0.5), vec3<f32>(0.85, 0.8, 0.72), band);
         alpha = opacity;
+    } else if (b_type == 11u) {
+        let n = fbm(N * 20.0);
+        albedo = vec3<f32>(0.4 + 0.15 * n, 0.38 + 0.12 * n, 0.36 + 0.1 * n);
+    } else if (b_type == 12u) {
+        albedo = vec3<f32>(0.85, 0.85, 0.88);
+        glow = 0.3;
+    } else if (b_type == 13u) {
+        albedo = vec3<f32>(0.3, 0.75, 1.0);
+        glow = 0.9;
+    } else if (b_type == 14u) {
+        albedo = vec3<f32>(1.0, 0.8, 0.2);
+        glow = 0.9;
     } else if (b_type == 100u) {
         let n = fbm(N * 12.0);
         albedo = mix(vec3<f32>(0.2, 0.55, 1.0), vec3<f32>(0.4, 0.75, 1.0), n);
@@ -686,9 +698,8 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
-        // Buffer allocated for dynamic offset push constants:
-        // We support max 30 draw calls per frame, each gets 256 bytes slot
-        let push_buffer_size = (30 * 256) as wgpu::BufferAddress;
+        // We support max 500 draw calls per frame, each gets 256 bytes slot
+        let push_buffer_size = (500 * 256) as wgpu::BufferAddress;
         let push_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Push Constants Uniform Buffer (Dynamic Offsets)"),
             size: push_buffer_size,
@@ -856,7 +867,7 @@ impl Renderer {
 
         // Slots for Orbits
         let orbit_slot_start = push_slots.len();
-        for i in 0..num_bodies {
+        for i in 0..trails.len() {
             let color = body_colors.get(i).copied().unwrap_or([0.8, 0.8, 0.8, 0.8]);
             push_slots.push(PushConstants {
                 model: identity,
@@ -869,17 +880,26 @@ impl Renderer {
 
         // Slots for Spheres & Rings
         let sphere_slot_start = push_slots.len();
-        for i in 0..num_bodies {
-            let p = bodies[i].pos_mass;
-            let radius = body_radii[i];
+        let num_spheres = bodies_pos_mass.len();
+        for i in 0..num_spheres {
+            let p = bodies_pos_mass[i].pos_mass;
+            let radius = body_radii.get(i).copied().unwrap_or(0.001);
             
             let dx = p[0] - camera_pos[0];
             let dy = p[1] - camera_pos[1];
             let dz = p[2] - camera_pos[2];
             let dist = (dx*dx + dy*dy + dz*dz).sqrt();
             
-            let b_type = body_types[i];
-            let min_size_factor = if b_type == 0 || b_type == 100 { 0.006 } else { 0.0025 };
+            let b_type = body_types.get(i).copied().unwrap_or(101);
+            let min_size_factor = if b_type == 0 || b_type == 100 { 
+                0.006 
+            } else if b_type >= 12 && b_type <= 14 { // ISS, Starlink, GPS
+                0.0005 
+            } else if b_type == 11 { // Asteroids
+                0.0008
+            } else { 
+                0.0025 
+            };
             let visual_radius = radius.max(dist * min_size_factor);
             
             let scale = nalgebra::Matrix4::new_scaling(visual_radius);
@@ -900,19 +920,18 @@ impl Renderer {
         // Slot for Saturn rings (if present, Saturn is index 6/type 6 usually)
         let mut has_saturn_rings = false;
         let mut saturn_model = identity;
-        for i in 0..num_bodies {
-            if body_types[i] == 6 {
+        for i in 0..num_spheres {
+            if body_types.get(i).copied().unwrap_or(101) == 6 {
                 has_saturn_rings = true;
-                let p = bodies[i].pos_mass;
-                let radius = body_radii[i];
+                let p = bodies_pos_mass[i].pos_mass;
+                let radius = body_radii.get(i).copied().unwrap_or(0.001);
                 
                 let dx = p[0] - camera_pos[0];
                 let dy = p[1] - camera_pos[1];
                 let dz = p[2] - camera_pos[2];
                 let dist = (dx*dx + dy*dy + dz*dz).sqrt();
                 
-                let b_type = body_types[i];
-                let min_size_factor = if b_type == 0 || b_type == 100 { 0.006 } else { 0.0025 };
+                let min_size_factor = 0.0025;
                 let visual_radius = radius.max(dist * min_size_factor);
                 
                 let scale = nalgebra::Matrix4::new_scaling(visual_radius);
@@ -940,7 +959,7 @@ impl Renderer {
         let mut flat_orbit_vertices = Vec::new();
         let mut orbit_draw_calls = Vec::new(); // Vec of (start_vertex, count) for each planet orbit
         
-        for i in 0..num_bodies {
+        for i in 0..trails.len() {
             let trail = &trails[i];
             let start = flat_orbit_vertices.len() as u32;
             let mut count = 0;
@@ -1009,7 +1028,7 @@ impl Renderer {
             // C. Draw Orbits/Trails
             rpass.set_pipeline(&self.orbit_pipeline);
             rpass.set_vertex_buffer(0, self.orbit_vertex_buffer.slice(..));
-            for i in 0..num_bodies {
+            for i in 0..trails.len() {
                 let (start, count) = orbit_draw_calls[i];
                 if count > 0 {
                     let offset = ((orbit_slot_start + i) * 256) as wgpu::DynamicOffset;
@@ -1022,7 +1041,8 @@ impl Renderer {
             rpass.set_pipeline(&self.sphere_pipeline);
             rpass.set_vertex_buffer(0, self.sphere_vertex_buffer.slice(..));
             rpass.set_index_buffer(self.sphere_index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-            for i in 0..num_bodies {
+            let num_spheres = bodies_pos_mass.len();
+            for i in 0..num_spheres {
                 let offset = ((sphere_slot_start + i) * 256) as wgpu::DynamicOffset;
                 rpass.set_bind_group(0, &self.bind_group, &[offset]);
                 rpass.draw_indexed(0..self.sphere_index_count, 0, 0..1);

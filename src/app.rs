@@ -67,6 +67,8 @@ pub struct AppState {
     left_mouse_down: bool,
     right_mouse_down: bool,
     left_click_occurred: bool,
+    current_jd: f64,
+    keplerian_bodies: Vec<crate::physics::kepler::KeplerianBody>,
 }
 
 impl AppState {
@@ -183,6 +185,8 @@ impl AppState {
             left_mouse_down: false,
             right_mouse_down: false,
             left_click_occurred: false,
+            current_jd: 2451545.0,
+            keplerian_bodies: Vec::new(),
         };
 
         state.load_preset_solar_system();
@@ -197,39 +201,176 @@ impl AppState {
         self.body_radii.clear();
         self.body_types.clear();
         self.history_trails.clear();
-        
-        let planet_params: [(&str, f64, f64, f32, u32); 9] = [
-            ("Sun", 0.0, 1.989e30, 0.163, 0),
-            ("Mercury", 0.387, 3.285e23, 0.00057, 1),
-            ("Venus", 0.723, 4.867e24, 0.00142, 2),
-            ("Earth", 1.000, 5.972e24, 0.0015, 3),
-            ("Mars", 1.524, 6.390e23, 0.0008, 4),
-            ("Jupiter", 5.203, 1.898e27, 0.0168, 5),
-            ("Saturn", 9.537, 5.683e26, 0.0142, 6),
-            ("Uranus", 19.191, 8.681e25, 0.006, 7),
-            ("Neptune", 30.070, 1.024e26, 0.0058, 8),
-        ];
+        self.keplerian_bodies.clear();
 
-        let g = 6.67430e-11_f64;
-        let m_sun = 1.989e30_f64;
-        let au = 1.496e11_f64;
-
-        for &(name, r_au, mass, radius, body_type) in &planet_params {
-            if r_au == 0.0 {
-                self.physics_engine.add_body(Vector3::zeros(), Vector3::zeros(), mass);
-            } else {
-                let r_m = r_au * au;
-                let v_m = (g * m_sun / r_m).sqrt();
-                self.physics_engine.add_body(
-                    Vector3::new(r_m, 0.0, 0.0),
-                    Vector3::new(0.0, 0.0, v_m),
-                    mass,
-                );
+        // Calculate current Julian Date at runtime
+        let ms_since_1970 = {
+            #[cfg(target_arch = "wasm32")]
+            {
+                web_sys::window()
+                    .and_then(|w| w.document())
+                    .map(|_| js_sys::Date::now())
+                    .unwrap_or_else(|| {
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_millis() as f64)
+                            .unwrap_or(0.0)
+                    })
             }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as f64)
+                    .unwrap_or(0.0)
+            }
+        };
+        let starting_jd = 2440587.5 + (ms_since_1970 / 86400000.0);
+        self.current_jd = starting_jd;
+
+        // Initialize Sun (index 0)
+        self.physics_engine.add_body(Vector3::zeros(), Vector3::zeros(), 1.989e30);
+        self.body_names.push("Sun".to_string());
+        self.body_radii.push(0.163);
+        self.body_types.push(0);
+        self.history_trails.push(std::collections::VecDeque::with_capacity(1000));
+
+        // Initialize planets 1 to 8 using J2000 Keplerian elements
+        for idx in 0..8 {
+            let (name, mass, radius, body_type) = match idx {
+                0 => ("Mercury", 3.285e23, 0.00057, 1),
+                1 => ("Venus", 4.867e24, 0.00142, 2),
+                2 => ("Earth", 5.972e24, 0.0015, 3),
+                3 => ("Mars", 6.390e23, 0.0008, 4),
+                4 => ("Jupiter", 1.898e27, 0.0168, 5),
+                5 => ("Saturn", 5.683e26, 0.0142, 6),
+                6 => ("Uranus", 8.681e25, 0.006, 7),
+                7 => ("Neptune", 1.024e26, 0.0058, 8),
+                _ => unreachable!(),
+            };
+
+            let (pos, vel) = crate::physics::kepler::get_planet_state(idx, starting_jd);
+            
+            self.physics_engine.add_body(pos, vel, mass);
             self.body_names.push(name.to_string());
             self.body_radii.push(radius);
             self.body_types.push(body_type);
             self.history_trails.push(std::collections::VecDeque::with_capacity(1000));
+        }
+
+        // Procedural LCG random generator for Asteroid Belt
+        let mut lcg_seed = 123456789_u64;
+        let mut next_rand = || {
+            lcg_seed = lcg_seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (lcg_seed >> 32) as f64 / 4294967296.0
+        };
+
+        let g = 6.67430e-11_f64;
+        let m_sun = 1.989e30_f64;
+        let au = 1.495978707e11_f64;
+
+        // 150 Asteroids (semi-major axis in [2.2, 3.2] AU, parent: Sun/0)
+        for k in 0..150 {
+            let a = (2.2 + next_rand() * 1.0) * au;
+            let e = 0.01 + next_rand() * 0.15;
+            let i = (next_rand() * 15.0).to_radians();
+            let omega = (next_rand() * 360.0).to_radians();
+            let arg_peri = (next_rand() * 360.0).to_radians();
+            let m0 = (next_rand() * 360.0).to_radians();
+            
+            let period = 2.0 * std::f64::consts::PI * (a.powi(3) / (g * m_sun)).sqrt();
+            
+            self.keplerian_bodies.push(crate::physics::kepler::KeplerianBody {
+                name: format!("Asteroid-{}", k + 1),
+                parent_idx: 0,
+                semi_major_axis: a,
+                eccentricity: e,
+                inclination: i,
+                longitude_ascending_node: omega,
+                argument_periapsis: arg_peri,
+                mean_anomaly_epoch: m0,
+                epoch_jd: starting_jd,
+                period,
+                radius_render: 0.00015 + (next_rand() as f32) * 0.00015,
+                body_type: 11,
+            });
+        }
+
+        // Earth Satellites (ISS, Starlink, GPS)
+        let g_m_earth = 6.67430e-11 * 5.972e24;
+
+        // 1. ISS (altitude ~420 km)
+        let iss_a = 6791000.0_f64;
+        let iss_period = 2.0 * std::f64::consts::PI * (iss_a.powi(3) / g_m_earth).sqrt();
+        self.keplerian_bodies.push(crate::physics::kepler::KeplerianBody {
+            name: "ISS".to_string(),
+            parent_idx: 3,
+            semi_major_axis: iss_a,
+            eccentricity: 0.0001,
+            inclination: 51.64_f64.to_radians(),
+            longitude_ascending_node: 80.0_f64.to_radians(),
+            argument_periapsis: 0.0,
+            mean_anomaly_epoch: 0.0,
+            epoch_jd: starting_jd,
+            period: iss_period,
+            radius_render: 0.00006,
+            body_type: 12,
+        });
+
+        // 2. Starlink satellites (20 satellites in 2 planes)
+        let starlink_a = 6921000.0_f64;
+        let starlink_period = 2.0 * std::f64::consts::PI * (starlink_a.powi(3) / g_m_earth).sqrt();
+        for k in 0..10 {
+            // Plane 1
+            self.keplerian_bodies.push(crate::physics::kepler::KeplerianBody {
+                name: format!("Starlink-1A-{}", k + 1),
+                parent_idx: 3,
+                semi_major_axis: starlink_a,
+                eccentricity: 0.0001,
+                inclination: 53.0_f64.to_radians(),
+                longitude_ascending_node: 45.0_f64.to_radians(),
+                argument_periapsis: 0.0,
+                mean_anomaly_epoch: (k as f64 * 36.0).to_radians(),
+                epoch_jd: starting_jd,
+                period: starlink_period,
+                radius_render: 0.000045,
+                body_type: 13,
+            });
+            // Plane 2
+            self.keplerian_bodies.push(crate::physics::kepler::KeplerianBody {
+                name: format!("Starlink-2B-{}", k + 1),
+                parent_idx: 3,
+                semi_major_axis: starlink_a,
+                eccentricity: 0.0001,
+                inclination: 53.0_f64.to_radians(),
+                longitude_ascending_node: 135.0_f64.to_radians(),
+                argument_periapsis: 0.0,
+                mean_anomaly_epoch: (k as f64 * 36.0 + 18.0).to_radians(),
+                epoch_jd: starting_jd,
+                period: starlink_period,
+                radius_render: 0.000045,
+                body_type: 13,
+            });
+        }
+
+        // 3. GPS satellites (6 satellites in 6 planes)
+        let gps_a = 26571000.0_f64;
+        let gps_period = 2.0 * std::f64::consts::PI * (gps_a.powi(3) / g_m_earth).sqrt();
+        for k in 0..6 {
+            self.keplerian_bodies.push(crate::physics::kepler::KeplerianBody {
+                name: format!("GPS-{}", k + 1),
+                parent_idx: 3,
+                semi_major_axis: gps_a,
+                eccentricity: 0.01,
+                inclination: 55.0_f64.to_radians(),
+                longitude_ascending_node: (k as f64 * 60.0).to_radians(),
+                argument_periapsis: 0.0,
+                mean_anomaly_epoch: (k as f64 * 45.0).to_radians(),
+                epoch_jd: starting_jd,
+                period: gps_period,
+                radius_render: 0.00005,
+                body_type: 14,
+            });
         }
 
         self.selected_body_idx = 3; // Earth
@@ -265,6 +406,7 @@ impl AppState {
                 self.body_radii.clear();
                 self.body_types.clear();
                 self.history_trails.clear();
+                self.keplerian_bodies.clear();
                 
                 for (name, pos, vel, mass, radius, body_type) in bodies {
                     self.physics_engine.add_body(pos, vel, mass);
@@ -314,15 +456,51 @@ impl AppState {
         if !self.paused {
             let sim_dt = capped_dt * 86400.0 * self.sim_speed; 
             self.physics_engine.step(sim_dt);
+            self.current_jd += capped_dt * self.sim_speed;
         }
 
         let au = 1.496e11_f64;
         let m_earth = 5.972e24_f64;
         let m_sun = 1.989e30_f64;
 
-        let positions = self.physics_engine.get_positions().to_vec();
-        let velocities = self.physics_engine.get_velocities().to_vec();
-        let masses = self.physics_engine.get_masses().to_vec();
+        let base_positions = self.physics_engine.get_positions().to_vec();
+        let base_velocities = self.physics_engine.get_velocities().to_vec();
+        let base_masses = self.physics_engine.get_masses().to_vec();
+        let physics_bodies_len = base_positions.len();
+
+        let mut positions = base_positions.clone();
+        let mut velocities = base_velocities.clone();
+        let mut masses = base_masses.clone();
+        let mut body_names = self.body_names.clone();
+        let mut body_radii = self.body_radii.clone();
+        let mut body_types = self.body_types.clone();
+
+        // Calculate Keplerian bodies' render positions
+        let physical_radii = [6.9634e8, 2.4397e6, 6.0518e6, 6.371e6, 3.3895e6, 6.9911e7, 5.8232e7, 2.5362e7, 2.4622e7];
+        for body in &self.keplerian_bodies {
+            let parent_pos = base_positions.get(body.parent_idx).copied().unwrap_or(Vector3::zeros());
+            let parent_vel = base_velocities.get(body.parent_idx).copied().unwrap_or(Vector3::zeros());
+            
+            let (pos_phys, vel_phys) = crate::physics::kepler::get_keplerian_body_state(body, self.current_jd, parent_pos, parent_vel);
+            
+            let rel_pos = if body.parent_idx > 0 && body.parent_idx < physical_radii.len() {
+                let rel_pos_phys = pos_phys - parent_pos;
+                let visual_radius = self.body_radii.get(body.parent_idx).copied().unwrap_or(0.0015) as f64;
+                let physical_radius_au = physical_radii[body.parent_idx] / 1.495978707e11;
+                let parent_scale_factor = visual_radius / physical_radius_au;
+                rel_pos_phys * parent_scale_factor
+            } else {
+                pos_phys - parent_pos
+            };
+            let pos_render = parent_pos + rel_pos;
+            
+            positions.push(pos_render);
+            velocities.push(vel_phys);
+            masses.push(0.0);
+            body_names.push(body.name.clone());
+            body_radii.push(body.radius_render);
+            body_types.push(body.body_type);
+        }
 
         // Keyboard camera updates
         if !self.imgui.io().want_capture_keyboard {
@@ -495,23 +673,31 @@ impl AppState {
                     let dz = pos_render.z - camera_pos.z;
                     let dist = (dx*dx + dy*dy + dz*dz).sqrt();
                     
-                    let b_type = self.body_types.get(i).copied().unwrap_or(101);
-                    let min_size_factor = if b_type == 0 || b_type == 100 { 0.006 } else { 0.0025 };
-                    let visual_radius = self.body_radii[i].max(dist * min_size_factor);
+                    let b_type = body_types.get(i).copied().unwrap_or(101);
+                    let min_size_factor = if b_type == 0 || b_type == 100 { 
+                        0.006 
+                    } else if b_type >= 12 && b_type <= 14 {
+                        0.0005
+                    } else if b_type == 11 {
+                        0.0008
+                    } else { 
+                        0.0025 
+                    };
+                    let visual_radius = body_radii.get(i).copied().unwrap_or(0.001).max(dist * min_size_factor);
                     
                     let v = pos_render - p_near;
                     let t_proj = v.dot(&ray_dir);
                     if t_proj > 0.0 {
-                        let d2 = v.norm_squared() - t_proj * t_proj;
-                        let r2 = visual_radius * visual_radius;
-                        let select_margin = 1.35;
-                        if d2 <= r2 * select_margin {
-                            let t_hit = t_proj - (r2 * select_margin - d2).sqrt();
-                            if t_hit < min_t {
-                                min_t = t_hit;
-                                hovered_idx = Some(i);
-                            }
-                        }
+                         let d2 = v.norm_squared() - t_proj * t_proj;
+                         let r2 = visual_radius * visual_radius;
+                         let select_margin = 1.35;
+                         if d2 <= r2 * select_margin {
+                             let t_hit = t_proj - (r2 * select_margin - d2).sqrt();
+                             if t_hit < min_t {
+                                 min_t = t_hit;
+                                 hovered_idx = Some(i);
+                             }
+                         }
                     }
                 }
             }
@@ -522,8 +708,8 @@ impl AppState {
         let current_left_click = self.left_click_occurred;
         self.left_click_occurred = false;
 
-        // Update trails history
-        for i in 0..positions.len() {
+        // Update trails history (only for major bodies)
+        for i in 0..physics_bodies_len {
             let p_si = positions[i];
             let p_render = Vector3::new(
                 (p_si.x / au) as f32,
@@ -548,7 +734,7 @@ impl AppState {
 
         let active_system_name = self.active_system_name.clone();
         let mut selected_body_idx = self.selected_body_idx;
-        let body_names = self.body_names.clone();
+        let body_names = body_names.clone();
 
         #[cfg(not(target_arch = "wasm32"))]
         self.platform.prepare_frame(self.imgui.io_mut(), &self.window).unwrap();
@@ -568,7 +754,7 @@ impl AppState {
                 if let Some(hovered) = self.hovered_body_idx {
                     selected_body_idx = hovered;
                     self.follow_camera = true;
-                    let radius = self.body_radii[hovered];
+                    let radius = body_radii[hovered];
                     self.camera_distance = (radius * 100.0).clamp(0.005, 300.0);
                 } else {
                     self.follow_camera = false;
@@ -581,7 +767,7 @@ impl AppState {
             let mut visual_warp = self.visual_warp_factor;
             
             ui.window("Simulation Control Panel")
-                .size([320.0, 200.0], imgui::Condition::FirstUseEver)
+                .size([320.0, 240.0], imgui::Condition::FirstUseEver)
                 .build(|| {
                     ui.text("AstroSim Solar System Controller");
                     ui.separator();
@@ -590,6 +776,12 @@ impl AppState {
                     ui.slider("Sim Speed (Days/Sec)", 0.0, 100.0, &mut sim_speed);
                     ui.slider("Gravity Well Warp", 0.01, 10.0, &mut visual_warp);
                     
+                    if !self.keplerian_bodies.is_empty() {
+                        let (y, m, d, h, min) = crate::physics::kepler::jd_to_calendar(self.current_jd);
+                        ui.separator();
+                        ui.text(format!("Sim Date: {:04}-{:02}-{:02} {:02}:{:02}", y, m, d, h, min));
+                    }
+
                     ui.separator();
                     ui.text("Camera Controls:");
                     ui.text("- Arrow Keys: Rotate / Tilt");
@@ -610,8 +802,10 @@ impl AppState {
                     
                     if let Some(_token) = ui.begin_combo("Select Entity", &body_names[current]) {
                         for i in 0..body_names.len() {
-                            if ui.selectable(&body_names[i]) {
-                                current = i;
+                            if i < physics_bodies_len || i == current {
+                                if ui.selectable(&body_names[i]) {
+                                    current = i;
+                                }
                             }
                         }
                     }
@@ -623,61 +817,88 @@ impl AppState {
                     let v = velocities[current];
                     let m = masses[current];
                     
-                    ui.text(format!("Inspect: {}", body_names[current]));
-                    ui.text(format!("Distance from Star: {:.4} AU", p.norm() / au));
-                    ui.text(format!("Velocity: {:.2} km/s", v.norm() / 1000.0));
-                    
-                    ui.separator();
-                    
-                    let mut pos_au = [ (p.x / au) as f32, (p.y / au) as f32, (p.z / au) as f32 ];
-                    let mut vel_kms = [ (v.x / 1000.0) as f32, (v.y / 1000.0) as f32, (v.z / 1000.0) as f32 ];
-                    
-                    let mut mass_scale = if current == 0 {
-                        (m / m_sun) as f32
-                    } else {
-                        (m / m_earth) as f32
-                    };
-                    
-                    let unit_label = if current == 0 { "M_solar" } else { "M_earth" };
-                    
-                    let mut pos_changed = false;
-                    let mut vel_changed = false;
-                    let mut mass_changed = false;
-                    
-                    if ui.input_float3("Position (AU)", &mut pos_au).build() {
-                        pos_changed = true;
-                    }
-                    if ui.input_float3("Velocity (km/s)", &mut vel_kms).build() {
-                        vel_changed = true;
-                    }
-                    
-                    let mass_label = format!("Mass ({})", unit_label);
-                    if ui.input_float(mass_label, &mut mass_scale).step(0.1).build() {
-                        mass_changed = true;
-                    }
-                    
-                    if pos_changed || vel_changed || mass_changed {
-                        let new_pos = Vector3::new(
-                            pos_au[0] as f64 * au,
-                            pos_au[1] as f64 * au,
-                            pos_au[2] as f64 * au,
-                        );
-                        let new_vel = Vector3::new(
-                            vel_kms[0] as f64 * 1000.0,
-                            vel_kms[1] as f64 * 1000.0,
-                            vel_kms[2] as f64 * 1000.0,
-                        );
-                        let new_mass = if current == 0 {
-                            mass_scale as f64 * m_sun
+                    if current >= physics_bodies_len {
+                        // Keplerian Body Inspector
+                        let k_idx = current - physics_bodies_len;
+                        let k_body = &self.keplerian_bodies[k_idx];
+                        
+                        ui.text(format!("Inspect: {} (Analytical)", k_body.name));
+                        ui.separator();
+                        
+                        if k_body.parent_idx == 0 {
+                            ui.text(format!("Parent: Sun"));
+                            ui.text(format!("Distance from Sun: {:.4} AU", p.norm() / au));
                         } else {
-                            mass_scale as f64 * m_earth
+                            let parent_name = body_names.get(k_body.parent_idx).cloned().unwrap_or("Unknown".to_string());
+                            ui.text(format!("Parent: {}", parent_name));
+                            let physical_radii = [6.9634e8, 2.4397e6, 6.0518e6, 6.371e6, 3.3895e6, 6.9911e7, 5.8232e7, 2.5362e7, 2.4622e7];
+                            let parent_radius = physical_radii.get(k_body.parent_idx).copied().unwrap_or(6371000.0);
+                            let alt_km = (k_body.semi_major_axis - parent_radius) / 1000.0;
+                            ui.text(format!("Altitude: {:.1} km", alt_km));
+                        }
+                        
+                        ui.text(format!("Orbital Period: {:.1} min", k_body.period / 60.0));
+                        ui.text(format!("Eccentricity: {:.5}", k_body.eccentricity));
+                        ui.text(format!("Inclination: {:.2} deg", k_body.inclination.to_degrees()));
+                        ui.text(format!("Velocity: {:.2} km/s", v.norm() / 1000.0));
+                    } else {
+                        // Physical Body Inspector
+                        ui.text(format!("Inspect: {}", body_names[current]));
+                        ui.text(format!("Distance from Star: {:.4} AU", p.norm() / au));
+                        ui.text(format!("Velocity: {:.2} km/s", v.norm() / 1000.0));
+                        
+                        ui.separator();
+                        
+                        let mut pos_au = [ (p.x / au) as f32, (p.y / au) as f32, (p.z / au) as f32 ];
+                        let mut vel_kms = [ (v.x / 1000.0) as f32, (v.y / 1000.0) as f32, (v.z / 1000.0) as f32 ];
+                        
+                        let mut mass_scale = if current == 0 {
+                            (m / m_sun) as f32
+                        } else {
+                            (m / m_earth) as f32
                         };
-                        edit_body = Some((current, new_pos, new_vel, new_mass));
-                    }
-                    
-                    ui.separator();
-                    if ui.button("Restore Circular Orbit") {
-                        restore_circular = true;
+                        
+                        let unit_label = if current == 0 { "M_solar" } else { "M_earth" };
+                        
+                        let mut pos_changed = false;
+                        let mut vel_changed = false;
+                        let mut mass_changed = false;
+                        
+                        if ui.input_float3("Position (AU)", &mut pos_au).build() {
+                            pos_changed = true;
+                        }
+                        if ui.input_float3("Velocity (km/s)", &mut vel_kms).build() {
+                            vel_changed = true;
+                        }
+                        
+                        let mass_label = format!("Mass ({})", unit_label);
+                        if ui.input_float(mass_label, &mut mass_scale).step(0.1).build() {
+                            mass_changed = true;
+                        }
+                        
+                        if pos_changed || vel_changed || mass_changed {
+                            let new_pos = Vector3::new(
+                                pos_au[0] as f64 * au,
+                                pos_au[1] as f64 * au,
+                                pos_au[2] as f64 * au,
+                            );
+                            let new_vel = Vector3::new(
+                                vel_kms[0] as f64 * 1000.0,
+                                vel_kms[1] as f64 * 1000.0,
+                                vel_kms[2] as f64 * 1000.0,
+                            );
+                            let new_mass = if current == 0 {
+                                mass_scale as f64 * m_sun
+                            } else {
+                                mass_scale as f64 * m_earth
+                            };
+                            edit_body = Some((current, new_pos, new_vel, new_mass));
+                        }
+                        
+                        ui.separator();
+                        if ui.button("Restore Circular Orbit") {
+                            restore_circular = true;
+                        }
                     }
                 });
 
@@ -821,7 +1042,7 @@ impl AppState {
 
         let mut body_colors = Vec::with_capacity(positions.len());
         for i in 0..positions.len() {
-            let b_type = self.body_types.get(i).copied().unwrap_or(101);
+            let b_type = body_types.get(i).copied().unwrap_or(101);
             let col = match b_type {
                 0 => [1.0, 0.9, 0.2, 1.0],
                 1 => [0.6, 0.6, 0.6, 1.0],
@@ -832,6 +1053,10 @@ impl AppState {
                 6 => [0.9, 0.8, 0.6, 1.0],
                 7 => [0.5, 0.8, 0.9, 1.0],
                 8 => [0.2, 0.4, 0.9, 1.0],
+                11 => [0.5, 0.45, 0.4, 1.0],
+                12 => [0.9, 0.9, 0.9, 1.0],
+                13 => [0.3, 0.75, 1.0, 1.0],
+                14 => [1.0, 0.8, 0.2, 1.0],
                 100 => [0.9, 0.4, 0.2, 1.0],
                 _ => [0.4, 0.6, 0.8, 1.0],
             };
@@ -847,8 +1072,8 @@ impl AppState {
             proj_vk.into(),
             inv_view_proj.into(),
             &body_ubos,
-            &self.body_radii,
-            &self.body_types,
+            &body_radii,
+            &body_types,
             &body_colors,
             self.selected_body_idx,
             self.hovered_body_idx,
