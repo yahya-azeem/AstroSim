@@ -178,7 +178,7 @@ impl CustomImguiRenderer {
             depth_stencil: depth_format.map(|format| wgpu::DepthStencilState {
                 format,
                 depth_write_enabled: Some(false),
-                depth_compare: Some(wgpu::CompareFunction::Always),
+                depth_compare: None,
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),

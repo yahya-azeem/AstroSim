@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AstroSim - WebGPU Portal</title>
+    <title>AstroSim</title>
     <style>
         html, body {
             margin: 0;
@@ -11,7 +11,7 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            background-color: #05050b;
+            background-color: #000000;
             color: #e2e8f0;
             font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             display: flex;
@@ -19,28 +19,10 @@
             align-items: center;
         }
 
-        #app-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 20px;
-        }
-
-        h1 {
-            font-size: 2rem;
-            font-weight: 700;
-            margin: 0;
-            background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: -0.05em;
-        }
-
-        /* The canvas itself will be created and styled by the WASM module */
         canvas {
-            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
+            width: 100vw;
+            height: 100vh;
+            display: block;
         }
     </style>
     <script type="importmap">
@@ -52,10 +34,6 @@
     </script>
 </head>
 <body>
-    <div id="app-container">
-        <h1>AstroSim WebGPU Browser Port</h1>
-    </div>
-
     <script type="module">
         import init, { start_simulation } from './pkg/AstroSim.js';
         
@@ -67,7 +45,6 @@
                 console.log("AstroSim simulation started successfully.");
             } catch (err) {
                 console.error("Error loading/starting AstroSim:", err);
-                const container = document.getElementById("app-container");
                 
                 // Remove the canvas if it was created/attached
                 const canvas = document.getElementById("astrosim-canvas");
@@ -79,7 +56,7 @@
                 errorDiv.style.border = "1px solid #ef4444";
                 errorDiv.style.padding = "20px";
                 errorDiv.style.borderRadius = "12px";
-                errorDiv.style.marginTop = "20px";
+                errorDiv.style.margin = "20px";
                 errorDiv.style.maxWidth = "600px";
                 errorDiv.style.textAlign = "center";
                 errorDiv.style.boxShadow = "0 10px 15px -3px rgba(0, 0, 0, 0.3)";
@@ -101,7 +78,7 @@
                 p.innerText = msg + ". Please ensure your browser supports WebGPU or WebGL2. On Linux, you might need to enable experimental flags (such as 'enable-unsafe-webgpu' in chrome://flags) or run on a supported browser.";
                 errorDiv.appendChild(p);
                 
-                container.appendChild(errorDiv);
+                document.body.appendChild(errorDiv);
             }
         }
         
