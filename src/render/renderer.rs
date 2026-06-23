@@ -401,7 +401,7 @@ pub struct Renderer {
     depth_view: wgpu::TextureView,
     
     // ImGui renderer
-    pub imgui_renderer: imgui_wgpu::Renderer,
+    pub imgui_renderer: super::imgui_renderer::CustomImguiRenderer,
 }
 
 impl Renderer {
@@ -734,12 +734,13 @@ impl Renderer {
         let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         // 7. Setup ImGui Renderer Config
-        let imgui_renderer_config = imgui_wgpu::RendererConfig {
-            texture_format: surface_config.format,
-            depth_format: Some(wgpu::TextureFormat::Depth32Float),
-            ..imgui_wgpu::RendererConfig::new()
-        };
-        let imgui_renderer = imgui_wgpu::Renderer::new(imgui_context, &device, &queue, imgui_renderer_config);
+        let imgui_renderer = super::imgui_renderer::CustomImguiRenderer::new(
+            imgui_context,
+            &device,
+            &queue,
+            surface_config.format,
+            Some(wgpu::TextureFormat::Depth32Float),
+        );
 
         Ok(Self {
             device,
