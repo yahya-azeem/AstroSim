@@ -390,18 +390,18 @@ impl AppState {
             );
             self.camera_target = target_pos;
             
-            let star_pos = if !positions.is_empty() {
-                let p_star = positions[0];
-                Vector3::new(
-                    (p_star.x / au) as f32,
-                    (p_star.y / au) as f32,
-                    (p_star.z / au) as f32,
-                )
+            let p_star = if !positions.is_empty() {
+                positions[0]
             } else {
                 Vector3::zeros()
             };
 
-            let rel_pos = target_pos - star_pos;
+            let rel_pos_f64 = p_si - p_star;
+            let rel_pos = Vector3::new(
+                (rel_pos_f64.x / au) as f32,
+                (rel_pos_f64.y / au) as f32,
+                (rel_pos_f64.z / au) as f32,
+            );
             let dir_cam = if current > 0 && rel_pos.norm_squared() > 1e-6 {
                 let r_norm = rel_pos.normalize();
                 let tangent = Vector3::new(rel_pos.z, 0.0, -rel_pos.x).normalize();
