@@ -161,26 +161,33 @@ fn fs_skybox(in: SkyboxOutput) -> @location(0) vec4<f32> {
     var god_rays = vec3<f32>(0.0);
     if (cos_theta > 0.0) {
         let proj_dir = dir - sun_dir * cos_theta;
-        let radial_dir = normalize(proj_dir);
+        let proj_len = length(proj_dir);
+        let radial_dir = proj_dir / (proj_len + 1e-5);
+        
         let time_scale = ubo.time * 0.18;
         let ray_noise1 = fbm(radial_dir * 7.0 + vec3<f32>(time_scale, 0.0, -time_scale * 0.5));
         let ray_noise2 = fbm(radial_dir * 15.0 - vec3<f32>(time_scale * 0.7, time_scale * 0.3, 0.0));
         var ray_noise = mix(ray_noise1, ray_noise2, 0.35);
         ray_noise = pow(ray_noise, 2.2) * 2.5; // High contrast sharp rays!
         
-        // Dynamically scale angular spread based on the angular size of the star
-        let theta_star = ubo.star_radius / d;
-        let p_inner = 350.0 / (theta_star * 6.0 + 0.1);
-        let p_outer = 12.0 / (theta_star * 6.0 + 0.1);
+        // Compute angular radius of the star safely
+        let d_safe = max(d, 1e-6);
+        let theta_star = asin(clamp(ubo.star_radius / d_safe, 0.0, 1.0));
+        let angle_from_center = acos(clamp(cos_theta, -1.0, 1.0));
         
-        let sun_halo = pow(cos_theta, p_inner) * 18.0; 
-        let outer_halo = pow(cos_theta, p_outer) * 3.5; 
+        // Angular distance from the edge of the star's visual disk
+        let delta_theta = max(0.0, angle_from_center - theta_star);
         
-        // Scale intensity based on distance and star size
-        let intensity_factor = clamp((ubo.star_radius / 0.163) * 0.6 / (d + 0.4), 0.02, 1.5);
+        // Halo and rays decay based on angular distance from the star's edge
+        let inner_halo = exp(-delta_theta * 35.0) * 1.5; 
+        let outer_halo = exp(-delta_theta * 8.0) * 0.35; 
+        
+        // Scale intensity smoothly with the visual size of the star relative to its Earth-baseline size (0.163 rad)
+        let size_ratio = theta_star / 0.163;
+        let intensity_factor = clamp(sqrt(size_ratio), 0.01, 1.2);
         
         let ray_col = vec3<f32>(1.0, 0.72, 0.4); // Golden solar light
-        god_rays = ray_col * (sun_halo * (ray_noise * 1.5 + 0.2) + outer_halo * (ray_noise * 1.1 + 0.1)) * 0.85 * intensity_factor;
+        god_rays = ray_col * (inner_halo * (ray_noise * 1.2 + 0.3) + outer_halo * (ray_noise * 1.0 + 0.15)) * intensity_factor;
     }
     
     var final_color = star_rgb + nebula1 + god_rays;
