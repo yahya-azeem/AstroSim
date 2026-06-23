@@ -1150,6 +1150,7 @@ impl AppState {
             [camera_pos.x, camera_pos.y, camera_pos.z],
             &trails,
             imgui_draw_data,
+            now as f32,
         )?;
 
         Ok(())

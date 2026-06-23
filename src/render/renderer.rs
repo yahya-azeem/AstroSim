@@ -144,16 +144,10 @@ fn fs_skybox(in: SkyboxOutput) -> @location(0) vec4<f32> {
         }
         star_rgb = star_col * star_intensity;
     }
+    // Deep space: faint, atmospheric background nebulae and stars
     let n1 = fbm(dir * 2.5 + vec3<f32>(1.2));
-    let n2 = fbm(dir * 3.5 - vec3<f32>(5.7));
-    let nebula1 = vec3<f32>(0.04, 0.015, 0.08) * n1;
-    let nebula2 = vec3<f32>(0.01, 0.03, 0.06) * n2;
-    let milky_way_band = smoothstep(0.45, 0.0, abs(dir.y + 0.4 * dir.x - 0.2 * dir.z));
-    let mw_noise = fbm(dir * 6.0);
-    let milky_way = vec3<f32>(0.12, 0.08, 0.15) * milky_way_band * (mw_noise + 0.3);
-    let core_glow = smoothstep(0.8, 0.0, distance(dir, vec3<f32>(0.6, -0.2, -0.7)));
-    let core = vec3<f32>(0.25, 0.15, 0.1) * core_glow * (fbm(dir * 8.0) * 0.7 + 0.3);
-    var final_color = star_rgb + nebula1 + nebula2 + milky_way + core;
+    let nebula1 = vec3<f32>(0.005, 0.002, 0.01) * n1; // Faint dark cosmic dust
+    var final_color = star_rgb + nebula1;
     final_color = 1.0 - exp(-final_color * 1.5);
     return vec4<f32>(final_color, 1.0);
 }
@@ -185,10 +179,10 @@ fn vs_grid(@location(0) in_pos: vec2<f32>) -> GridOutput {
 @fragment
 fn fs_grid(in: GridOutput) -> @location(0) vec4<f32> {
     let depth = clamp(-in.height * 0.4, 0.0, 1.0);
-    let base_color = vec3<f32>(0.0, 0.9, 0.7);
-    let deep_color = vec3<f32>(0.1, 0.3, 1.0);
+    let base_color = vec3<f32>(0.0, 0.4, 0.3);
+    let deep_color = vec3<f32>(0.05, 0.12, 0.45);
     let grid_color = mix(base_color, deep_color, depth);
-    let alpha = mix(0.5, 0.95, depth);
+    let alpha = mix(0.12, 0.35, depth);
     return vec4<f32>(grid_color, alpha);
 }
 
@@ -216,7 +210,7 @@ fn vs_orbit(@location(0) in_pos: vec2<f32>) -> OrbitOutput {
 
 @fragment
 fn fs_orbit(in: OrbitOutput) -> @location(0) vec4<f32> {
-    return push.color;
+    return vec4<f32>(push.color.rgb, push.color.a * 0.35);
 }
 
 // ==================== SPHERES ====================
@@ -253,17 +247,31 @@ fn vs_sphere(
 @fragment
 fn fs_sphere(in: SphereOutput) -> @location(0) vec4<f32> {
     let N = normalize(in.normal);
-    let L = normalize(vec3<f32>(1.0, 1.5, 1.0));
+    let light_pos = ubo.bodies_pos_mass[0].xyz;
+    let L = normalize(light_pos - in.world_pos);
     let diff = max(dot(N, L), 0.0);
-    let ambient = 0.12;
+    let d_au = distance(light_pos, in.world_pos);
+    let intensity = clamp(1.5 / (d_au + 0.5), 0.08, 3.0);
+    let ambient = 0.015;
     var albedo = vec3<f32>(0.8);
     var glow = 0.0;
     var alpha = 1.0;
     let b_type = in.body_type;
     if (b_type == 0u) {
-        let n = fbm(N * 8.0);
-        albedo = mix(vec3<f32>(1.0, 0.5, 0.0), vec3<f32>(1.0, 0.9, 0.1), n);
+        let time_scale = ubo.time * 0.15;
+        let n_coord = N * 9.0 + vec3<f32>(sin(time_scale * 0.5), time_scale, cos(time_scale * 0.3));
+        let n = fbm(n_coord);
+        albedo = mix(vec3<f32>(1.0, 0.45, 0.0), vec3<f32>(1.0, 0.95, 0.25), n);
         glow = 1.0;
+        
+        let V = normalize(in.view_dir);
+        let rim = 1.0 - max(dot(N, V), 0.0);
+        if (rim > 0.4) {
+            let flare_coord = N * 18.0 + vec3<f32>(time_scale * 1.5, -time_scale * 0.8, time_scale * 1.1);
+            let flare_noise = fbm(flare_coord);
+            let flare_intensity = pow((rim - 0.4) / 0.6, 3.5) * flare_noise * 4.0;
+            albedo = albedo + vec3<f32>(1.0, 0.3, 0.05) * flare_intensity;
+        }
     } else if (b_type == 1u) {
         let n = fbm(N * 16.0);
         albedo = vec3<f32>(0.5 + 0.2 * n);
@@ -356,11 +364,25 @@ fn fs_sphere(in: SphereOutput) -> @location(0) vec4<f32> {
         let col2 = vec3<f32>(0.15, 0.2, 0.35);
         albedo = mix(col1, col2, (band + 1.0) * 0.5);
     }
+    var spec = 0.0;
+    if (b_type == 3u) {
+        let n = fbm(N * 10.0);
+        if (n <= 0.46) {
+            let V = normalize(in.view_dir);
+            let H = normalize(L + V);
+            spec = pow(max(dot(N, H), 0.0), 64.0) * 0.6;
+        }
+    } else if (b_type == 12u) {
+        let V = normalize(in.view_dir);
+        let H = normalize(L + V);
+        spec = pow(max(dot(N, H), 0.0), 16.0) * 0.8;
+    }
+
     var color = vec3<f32>(0.0);
     if (glow > 0.5) {
         color = albedo;
     } else {
-        color = albedo * (diff + ambient);
+        color = albedo * (diff * intensity + ambient) + vec3<f32>(spec * intensity);
     }
     if (in.is_selected == 1u) {
         let V = normalize(in.view_dir);
@@ -821,6 +843,7 @@ impl Renderer {
         camera_pos: [f32; 3],
         trails: &[Vec<[f32; 2]>],
         imgui_draw_data: &imgui::DrawData,
+        time: f32,
     ) -> Result<()> {
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(texture) => texture,
@@ -846,7 +869,7 @@ impl Renderer {
             inv_view_proj,
             bodies,
             num_bodies: num_bodies as i32,
-            time: 0.0,
+            time,
             _padding: [0.0; 2],
         };
         self.queue.write_buffer(&self.ubo_buffer, 0, bytemuck::bytes_of(&ubo));
