@@ -144,10 +144,35 @@ fn fs_skybox(in: SkyboxOutput) -> @location(0) vec4<f32> {
         }
         star_rgb = star_col * star_intensity;
     }
+    
     // Deep space: faint, atmospheric background nebulae and stars
     let n1 = fbm(dir * 2.5 + vec3<f32>(1.2));
     let nebula1 = vec3<f32>(0.005, 0.002, 0.01) * n1; // Faint dark cosmic dust
-    var final_color = star_rgb + nebula1;
+    
+    // Calculate God Rays from the Sun (at origin/bodies_pos_mass[0])
+    let cam_pos4 = ubo.inv_view_proj * vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    let cam_pos = cam_pos4.xyz / cam_pos4.w;
+    let sun_dir = normalize(ubo.bodies_pos_mass[0].xyz - cam_pos);
+    let cos_theta = dot(dir, sun_dir);
+    
+    var god_rays = vec3<f32>(0.0);
+    if (cos_theta > 0.0) {
+        let proj_dir = dir - sun_dir * cos_theta;
+        let radial_dir = normalize(proj_dir);
+        let time_scale = ubo.time * 0.18;
+        let ray_noise1 = fbm(radial_dir * 7.0 + vec3<f32>(time_scale, 0.0, -time_scale * 0.5));
+        let ray_noise2 = fbm(radial_dir * 15.0 - vec3<f32>(time_scale * 0.7, time_scale * 0.3, 0.0));
+        var ray_noise = mix(ray_noise1, ray_noise2, 0.35);
+        ray_noise = pow(ray_noise, 2.2) * 2.5; // High contrast sharp rays!
+        
+        let sun_halo = pow(cos_theta, 350.0) * 18.0; // Tighter, brighter inner solar corona
+        let outer_halo = pow(cos_theta, 12.0) * 3.5; // Soft volumetric scattering
+        
+        let ray_col = vec3<f32>(1.0, 0.72, 0.4); // Golden solar light
+        god_rays = ray_col * (sun_halo * (ray_noise * 1.5 + 0.2) + outer_halo * (ray_noise * 1.1 + 0.1)) * 0.85;
+    }
+    
+    var final_color = star_rgb + nebula1 + god_rays;
     final_color = 1.0 - exp(-final_color * 1.5);
     return vec4<f32>(final_color, 1.0);
 }
@@ -258,20 +283,26 @@ fn fs_sphere(in: SphereOutput) -> @location(0) vec4<f32> {
     var alpha = 1.0;
     let b_type = in.body_type;
     if (b_type == 0u) {
-        let time_scale = ubo.time * 0.15;
-        let n_coord = N * 9.0 + vec3<f32>(sin(time_scale * 0.5), time_scale, cos(time_scale * 0.3));
-        let n = fbm(n_coord);
-        albedo = mix(vec3<f32>(1.0, 0.45, 0.0), vec3<f32>(1.0, 0.95, 0.25), n);
+        let time_scale = ubo.time * 0.22;
+        let n_coord1 = N * 7.5 + vec3<f32>(sin(time_scale * 0.3), time_scale * 0.8, cos(time_scale * 0.2));
+        let n_coord2 = N * 18.0 - vec3<f32>(time_scale * 0.5, sin(time_scale * 0.4), time_scale * 0.9);
+        let n1 = fbm(n_coord1);
+        let n2 = fbm(n_coord2);
+        let granulation = mix(n1, n2, 0.35);
+        
+        // Dynamic hot fiery solar gradient
+        albedo = mix(vec3<f32>(0.98, 0.22, 0.01), vec3<f32>(1.0, 0.96, 0.45), granulation);
         glow = 1.0;
         
         let V = normalize(in.view_dir);
         let rim = 1.0 - max(dot(N, V), 0.0);
-        if (rim > 0.4) {
-            let flare_coord = N * 18.0 + vec3<f32>(time_scale * 1.5, -time_scale * 0.8, time_scale * 1.1);
-            let flare_noise = fbm(flare_coord);
-            let flare_intensity = pow((rim - 0.4) / 0.6, 3.5) * flare_noise * 4.0;
-            albedo = albedo + vec3<f32>(1.0, 0.3, 0.05) * flare_intensity;
-        }
+        
+        // Solar flare/corona effect peeking from the rim
+        let flare_coord = N * 22.0 + vec3<f32>(time_scale * 1.8, -time_scale * 1.1, time_scale * 1.4);
+        let flare_noise = fbm(flare_coord);
+        let flare_intensity = pow(rim, 4.0) * flare_noise * 6.5;
+        
+        albedo = albedo + vec3<f32>(1.0, 0.4, 0.05) * flare_intensity;
     } else if (b_type == 1u) {
         let n = fbm(N * 16.0);
         albedo = vec3<f32>(0.5 + 0.2 * n);
@@ -344,15 +375,26 @@ fn fs_sphere(in: SphereOutput) -> @location(0) vec4<f32> {
     } else if (b_type == 11u) {
         let n = fbm(N * 20.0);
         albedo = vec3<f32>(0.4 + 0.15 * n, 0.38 + 0.12 * n, 0.36 + 0.1 * n);
-    } else if (b_type == 12u) {
-        albedo = vec3<f32>(0.85, 0.85, 0.88);
-        glow = 0.3;
-    } else if (b_type == 13u) {
-        albedo = vec3<f32>(0.3, 0.75, 1.0);
-        glow = 0.9;
-    } else if (b_type == 14u) {
-        albedo = vec3<f32>(1.0, 0.8, 0.2);
-        glow = 0.9;
+    } else if (b_type == 12u || b_type == 13u || b_type == 14u) {
+        if (in.uv.x > 0.05) {
+            // Solar panel wings: deep blue with solar grid cells
+            let grid_line = sin(in.uv.x * 24.0) * sin(in.uv.y * 8.0);
+            let panel_col = mix(vec3<f32>(0.03, 0.08, 0.22), vec3<f32>(0.1, 0.22, 0.55), smoothstep(-0.25, 0.25, grid_line));
+            albedo = panel_col;
+            glow = 0.25;
+        } else {
+            // Body: metallic color based on satellite type
+            if (b_type == 12u) {
+                albedo = vec3<f32>(0.85, 0.85, 0.88); // Silver ISS
+                glow = 0.15;
+            } else if (b_type == 13u) {
+                albedo = vec3<f32>(0.3, 0.75, 1.0); // Cyan Starlink
+                glow = 0.5;
+            } else {
+                albedo = vec3<f32>(1.0, 0.8, 0.2); // Gold GPS
+                glow = 0.4;
+            }
+        }
     } else if (b_type == 100u) {
         let n = fbm(N * 12.0);
         albedo = mix(vec3<f32>(0.2, 0.55, 1.0), vec3<f32>(0.4, 0.75, 1.0), n);
@@ -413,6 +455,18 @@ pub struct Renderer {
     sphere_vertex_buffer: wgpu::Buffer,
     sphere_index_buffer: wgpu::Buffer,
     sphere_index_count: u32,
+    
+    iss_vertex_buffer: wgpu::Buffer,
+    iss_index_buffer: wgpu::Buffer,
+    iss_index_count: u32,
+    
+    starlink_vertex_buffer: wgpu::Buffer,
+    starlink_index_buffer: wgpu::Buffer,
+    starlink_index_count: u32,
+    
+    gps_vertex_buffer: wgpu::Buffer,
+    gps_index_buffer: wgpu::Buffer,
+    gps_index_count: u32,
     
     ring_vertex_buffer: wgpu::Buffer,
     ring_index_buffer: wgpu::Buffer,
@@ -689,6 +743,45 @@ impl Renderer {
         });
         let sphere_index_count = sphere_indices.len() as u32;
 
+        let (iss_verts, iss_indices) = generate_iss();
+        let iss_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("ISS Vertex Buffer"),
+            contents: bytemuck::cast_slice(&iss_verts),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let iss_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("ISS Index Buffer"),
+            contents: bytemuck::cast_slice(&iss_indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        let iss_index_count = iss_indices.len() as u32;
+
+        let (starlink_verts, starlink_indices) = generate_starlink();
+        let starlink_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Starlink Vertex Buffer"),
+            contents: bytemuck::cast_slice(&starlink_verts),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let starlink_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Starlink Index Buffer"),
+            contents: bytemuck::cast_slice(&starlink_indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        let starlink_index_count = starlink_indices.len() as u32;
+
+        let (gps_verts, gps_indices) = generate_gps();
+        let gps_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("GPS Vertex Buffer"),
+            contents: bytemuck::cast_slice(&gps_verts),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let gps_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("GPS Index Buffer"),
+            contents: bytemuck::cast_slice(&gps_indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        let gps_index_count = gps_indices.len() as u32;
+
         let (ring_verts, ring_indices) = generate_ring(1.4, 2.3, 32);
         let ring_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Saturn Ring Vertex Buffer"),
@@ -789,6 +882,15 @@ impl Renderer {
             sphere_vertex_buffer,
             sphere_index_buffer,
             sphere_index_count,
+            iss_vertex_buffer,
+            iss_index_buffer,
+            iss_index_count,
+            starlink_vertex_buffer,
+            starlink_index_buffer,
+            starlink_index_count,
+            gps_vertex_buffer,
+            gps_index_buffer,
+            gps_index_count,
             ring_vertex_buffer,
             ring_index_buffer,
             ring_index_count,
@@ -1060,15 +1162,31 @@ impl Renderer {
                 }
             }
 
-            // D. Draw Spheres
+            // D. Draw Spheres & Satellites
             rpass.set_pipeline(&self.sphere_pipeline);
-            rpass.set_vertex_buffer(0, self.sphere_vertex_buffer.slice(..));
-            rpass.set_index_buffer(self.sphere_index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             let num_spheres = bodies_pos_mass.len();
             for i in 0..num_spheres {
                 let offset = ((sphere_slot_start + i) * 256) as wgpu::DynamicOffset;
                 rpass.set_bind_group(0, &self.bind_group, &[offset]);
-                rpass.draw_indexed(0..self.sphere_index_count, 0, 0..1);
+                
+                let b_type = body_types.get(i).copied().unwrap_or(101);
+                if b_type == 12 {
+                    rpass.set_vertex_buffer(0, self.iss_vertex_buffer.slice(..));
+                    rpass.set_index_buffer(self.iss_index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    rpass.draw_indexed(0..self.iss_index_count, 0, 0..1);
+                } else if b_type == 13 {
+                    rpass.set_vertex_buffer(0, self.starlink_vertex_buffer.slice(..));
+                    rpass.set_index_buffer(self.starlink_index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    rpass.draw_indexed(0..self.starlink_index_count, 0, 0..1);
+                } else if b_type == 14 {
+                    rpass.set_vertex_buffer(0, self.gps_vertex_buffer.slice(..));
+                    rpass.set_index_buffer(self.gps_index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    rpass.draw_indexed(0..self.gps_index_count, 0, 0..1);
+                } else {
+                    rpass.set_vertex_buffer(0, self.sphere_vertex_buffer.slice(..));
+                    rpass.set_index_buffer(self.sphere_index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    rpass.draw_indexed(0..self.sphere_index_count, 0, 0..1);
+                }
             }
 
             // E. Draw Saturn Rings
@@ -1173,25 +1291,137 @@ fn generate_ring(inner_radius: f32, outer_radius: f32, segments: u32) -> (Vec<Sp
         vertices.push(SphereVertex {
             pos: [c * inner_radius, 0.0, s * inner_radius],
             normal: [0.0, 1.0, 0.0],
-            uv: [0.0, i as f32 / segments as f32],
+            uv: [0.0, 0.0],
         });
         vertices.push(SphereVertex {
             pos: [c * outer_radius, 0.0, s * outer_radius],
             normal: [0.0, 1.0, 0.0],
-            uv: [1.0, i as f32 / segments as f32],
+            uv: [1.0, 1.0],
         });
+        if i < segments {
+            let i0 = i * 2;
+            let i1 = i0 + 1;
+            let i2 = ((i + 1) * 2) % (segments * 2);
+            let i3 = (i2 + 1) % (segments * 2);
+            indices.push(i0);
+            indices.push(i2);
+            indices.push(i1);
+            indices.push(i1);
+            indices.push(i2);
+            indices.push(i3);
+        }
     }
-    for i in 0..segments {
-        let i0 = i * 2;
-        let i1 = i0 + 1;
-        let i2 = i0 + 2;
-        let i3 = i0 + 3;
-        indices.push(i0);
-        indices.push(i1);
-        indices.push(i2);
-        indices.push(i2);
-        indices.push(i1);
-        indices.push(i3);
-    }
+    (vertices, indices)
+}
+
+fn add_quad_helper(
+    p0: [f32; 3], p1: [f32; 3], p2: [f32; 3], p3: [f32; 3],
+    normal: [f32; 3], uv_rect: [f32; 4],
+    vertices: &mut Vec<SphereVertex>, indices: &mut Vec<u32>
+) {
+    let start = vertices.len() as u32;
+    vertices.push(SphereVertex { pos: p0, normal, uv: [uv_rect[0], uv_rect[1]] });
+    vertices.push(SphereVertex { pos: p1, normal, uv: [uv_rect[2], uv_rect[1]] });
+    vertices.push(SphereVertex { pos: p2, normal, uv: [uv_rect[2], uv_rect[3]] });
+    vertices.push(SphereVertex { pos: p3, normal, uv: [uv_rect[0], uv_rect[3]] });
+    
+    indices.push(start);
+    indices.push(start + 1);
+    indices.push(start + 2);
+    
+    indices.push(start);
+    indices.push(start + 2);
+    indices.push(start + 3);
+}
+
+fn add_box_helper(
+    x_min: f32, x_max: f32, y_min: f32, y_max: f32, z_min: f32, z_max: f32,
+    uv_rect: [f32; 4],
+    vertices: &mut Vec<SphereVertex>, indices: &mut Vec<u32>
+) {
+    add_quad_helper([x_min, y_min, z_max], [x_max, y_min, z_max], [x_max, y_max, z_max], [x_min, y_max, z_max], [0.0, 0.0, 1.0], uv_rect, vertices, indices);
+    add_quad_helper([x_max, y_min, z_min], [x_min, y_min, z_min], [x_min, y_max, z_min], [x_max, y_max, z_min], [0.0, 0.0, -1.0], uv_rect, vertices, indices);
+    add_quad_helper([x_min, y_max, z_max], [x_max, y_max, z_max], [x_max, y_max, z_min], [x_min, y_max, z_min], [0.0, 1.0, 0.0], uv_rect, vertices, indices);
+    add_quad_helper([x_min, y_min, z_min], [x_max, y_min, z_min], [x_max, y_min, z_max], [x_min, y_min, z_max], [0.0, -1.0, 0.0], uv_rect, vertices, indices);
+    add_quad_helper([x_max, y_min, z_max], [x_max, y_min, z_min], [x_max, y_max, z_min], [x_max, y_max, z_max], [1.0, 0.0, 0.0], uv_rect, vertices, indices);
+    add_quad_helper([x_min, y_min, z_min], [x_min, y_min, z_max], [x_min, y_max, z_max], [x_min, y_max, z_min], [-1.0, 0.0, 0.0], uv_rect, vertices, indices);
+}
+
+fn generate_iss() -> (Vec<SphereVertex>, Vec<u32>) {
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    
+    // ISS components:
+    // 1. Central backbone truss (along X)
+    add_box_helper(-0.85, 0.85, -0.02, 0.02, -0.02, 0.02, [0.0, 0.0, 0.0, 0.0], &mut vertices, &mut indices);
+
+    // 2. Pressurized Modules (cluster at the center)
+    add_box_helper(-0.06, 0.06, -0.06, 0.06, -0.25, 0.25, [0.0, 0.0, 0.0, 0.0], &mut vertices, &mut indices);
+    add_box_helper(-0.16, 0.16, -0.05, 0.05, -0.05, 0.05, [0.0, 0.0, 0.0, 0.0], &mut vertices, &mut indices);
+    add_box_helper(-0.05, 0.05, -0.12, 0.12, -0.05, 0.05, [0.0, 0.0, 0.0, 0.0], &mut vertices, &mut indices);
+
+    // 3. Left transverse truss and solar wings at x = -0.75
+    add_box_helper(-0.77, -0.73, -0.02, 0.02, -0.4, 0.4, [0.0, 0.0, 0.0, 0.0], &mut vertices, &mut indices);
+    // Left Wing 1 (Z: 0.08 to 0.42) - Top and bottom double-sided
+    add_quad_helper([-0.95, 0.0, 0.42], [-0.55, 0.0, 0.42], [-0.55, 0.0, 0.08], [-0.95, 0.0, 0.08], [0.0, 1.0, 0.0], [0.1, 0.1, 1.0, 1.0], &mut vertices, &mut indices);
+    add_quad_helper([-0.55, 0.0, 0.42], [-0.95, 0.0, 0.42], [-0.95, 0.0, 0.08], [-0.55, 0.0, 0.08], [0.0, -1.0, 0.0], [0.1, 0.1, 1.0, 1.0], &mut vertices, &mut indices);
+    // Left Wing 2 (Z: -0.42 to -0.08)
+    add_quad_helper([-0.95, 0.0, -0.08], [-0.55, 0.0, -0.08], [-0.55, 0.0, -0.42], [-0.95, 0.0, -0.42], [0.0, 1.0, 0.0], [0.1, 0.1, 1.0, 1.0], &mut vertices, &mut indices);
+    add_quad_helper([-0.55, 0.0, -0.08], [-0.95, 0.0, -0.08], [-0.95, 0.0, -0.42], [-0.55, 0.0, -0.42], [0.0, -1.0, 0.0], [0.1, 0.1, 1.0, 1.0], &mut vertices, &mut indices);
+
+    // 4. Right transverse truss and solar wings at x = 0.75
+    add_box_helper(0.73, 0.77, -0.02, 0.02, -0.4, 0.4, [0.0, 0.0, 0.0, 0.0], &mut vertices, &mut indices);
+    // Right Wing 1 (Z: 0.08 to 0.42)
+    add_quad_helper([0.55, 0.0, 0.42], [0.95, 0.0, 0.42], [0.95, 0.0, 0.08], [0.55, 0.0, 0.08], [0.0, 1.0, 0.0], [0.1, 0.1, 1.0, 1.0], &mut vertices, &mut indices);
+    add_quad_helper([0.95, 0.0, 0.42], [0.55, 0.0, 0.42], [0.55, 0.0, 0.08], [0.95, 0.0, 0.08], [0.0, -1.0, 0.0], [0.1, 0.1, 1.0, 1.0], &mut vertices, &mut indices);
+    // Right Wing 2 (Z: -0.42 to -0.08)
+    add_quad_helper([0.55, 0.0, -0.08], [0.95, 0.0, -0.08], [0.95, 0.0, -0.42], [0.55, 0.0, -0.42], [0.0, 1.0, 0.0], [0.1, 0.1, 1.0, 1.0], &mut vertices, &mut indices);
+    add_quad_helper([0.95, 0.0, -0.08], [0.55, 0.0, -0.08], [0.55, 0.0, -0.42], [0.95, 0.0, -0.42], [0.0, -1.0, 0.0], [0.1, 0.1, 1.0, 1.0], &mut vertices, &mut indices);
+
+    (vertices, indices)
+}
+
+fn generate_starlink() -> (Vec<SphereVertex>, Vec<u32>) {
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    
+    // Starlink components:
+    // 1. Flat central chassis (box)
+    add_box_helper(-0.15, 0.15, -0.04, 0.04, -0.15, 0.15, [0.0, 0.0, 0.0, 0.0], &mut vertices, &mut indices);
+
+    // 2. Connector boom to solar panel (only on left side, -x)
+    add_box_helper(-0.25, -0.15, -0.015, 0.015, -0.02, 0.02, [0.0, 0.0, 0.0, 0.0], &mut vertices, &mut indices);
+
+    // 3. Single large solar array panel (extending on -x side)
+    add_quad_helper([-0.9, 0.0, 0.18], [-0.25, 0.0, 0.18], [-0.25, 0.0, -0.18], [-0.9, 0.0, -0.18], [0.0, 1.0, 0.0], [0.1, 0.1, 1.0, 1.0], &mut vertices, &mut indices);
+    add_quad_helper([-0.25, 0.0, 0.18], [-0.9, 0.0, 0.18], [-0.9, 0.0, -0.18], [-0.25, 0.0, -0.18], [0.0, -1.0, 0.0], [0.1, 0.1, 1.0, 1.0], &mut vertices, &mut indices);
+
+    (vertices, indices)
+}
+
+fn generate_gps() -> (Vec<SphereVertex>, Vec<u32>) {
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    
+    // GPS components:
+    // 1. Central boxy chassis (cube)
+    add_box_helper(-0.12, 0.12, -0.12, 0.12, -0.12, 0.12, [0.0, 0.0, 0.0, 0.0], &mut vertices, &mut indices);
+
+    // 2. Top-facing dish/aperture antenna (pointing along +y)
+    add_box_helper(-0.04, 0.04, 0.12, 0.22, -0.04, 0.04, [0.0, 0.0, 0.0, 0.0], &mut vertices, &mut indices);
+    add_box_helper(-0.06, 0.06, 0.22, 0.24, -0.06, 0.06, [0.0, 0.0, 0.0, 0.0], &mut vertices, &mut indices);
+
+    // 3. Connector booms for left/right panels
+    add_box_helper(-0.25, -0.12, -0.015, 0.015, -0.015, 0.015, [0.0, 0.0, 0.0, 0.0], &mut vertices, &mut indices);
+    add_box_helper(0.12, 0.25, -0.015, 0.015, -0.015, 0.015, [0.0, 0.0, 0.0, 0.0], &mut vertices, &mut indices);
+
+    // 4. Two symmetrical solar panel wings
+    // Left wing
+    add_quad_helper([-0.85, 0.0, 0.16], [-0.25, 0.0, 0.16], [-0.25, 0.0, -0.16], [-0.85, 0.0, -0.16], [0.0, 1.0, 0.0], [0.1, 0.1, 1.0, 1.0], &mut vertices, &mut indices);
+    add_quad_helper([-0.25, 0.0, 0.16], [-0.85, 0.0, 0.16], [-0.85, 0.0, -0.16], [-0.25, 0.0, -0.16], [0.0, -1.0, 0.0], [0.1, 0.1, 1.0, 1.0], &mut vertices, &mut indices);
+    // Right wing
+    add_quad_helper([0.25, 0.0, 0.16], [0.85, 0.0, 0.16], [0.85, 0.0, -0.16], [0.25, 0.0, -0.16], [0.0, 1.0, 0.0], [0.1, 0.1, 1.0, 1.0], &mut vertices, &mut indices);
+    add_quad_helper([0.85, 0.0, 0.16], [0.25, 0.0, 0.16], [0.25, 0.0, -0.16], [0.85, 0.0, -0.16], [0.0, -1.0, 0.0], [0.1, 0.1, 1.0, 1.0], &mut vertices, &mut indices);
+
     (vertices, indices)
 }

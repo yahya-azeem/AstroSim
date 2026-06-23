@@ -346,7 +346,7 @@ impl AppState {
             mean_anomaly_epoch: 0.0,
             epoch_jd: starting_jd,
             period: iss_period,
-            radius_render: 0.00006,
+            radius_render: 0.00008,
             body_type: 12,
         });
 
@@ -366,7 +366,7 @@ impl AppState {
                 mean_anomaly_epoch: (k as f64 * 36.0).to_radians(),
                 epoch_jd: starting_jd,
                 period: starlink_period,
-                radius_render: 0.000045,
+                radius_render: 0.000015,
                 body_type: 13,
             });
             // Plane 2
@@ -381,7 +381,7 @@ impl AppState {
                 mean_anomaly_epoch: (k as f64 * 36.0 + 18.0).to_radians(),
                 epoch_jd: starting_jd,
                 period: starlink_period,
-                radius_render: 0.000045,
+                radius_render: 0.000015,
                 body_type: 13,
             });
         }
@@ -401,7 +401,7 @@ impl AppState {
                 mean_anomaly_epoch: (k as f64 * 45.0).to_radians(),
                 epoch_jd: starting_jd,
                 period: gps_period,
-                radius_render: 0.00005,
+                radius_render: 0.00003,
                 body_type: 14,
             });
         }
@@ -620,10 +620,10 @@ impl AppState {
             }
             
             if self.pressed_keys.contains(&KeyCode::KeyQ) {
-                self.camera_distance = (self.camera_distance * 1.02).clamp(0.001, 300.0);
+                self.camera_distance = (self.camera_distance * 1.02).clamp(0.00001, 300.0);
             }
             if self.pressed_keys.contains(&KeyCode::KeyE) {
-                self.camera_distance = (self.camera_distance * 0.98).clamp(0.001, 300.0);
+                self.camera_distance = (self.camera_distance * 0.98).clamp(0.00001, 300.0);
             }
         }
 
@@ -656,10 +656,11 @@ impl AppState {
             &Vector3::y(),
         );
 
+        let near_plane = (self.camera_distance * 0.05).clamp(0.000001, 0.05);
         let proj = nalgebra::Matrix4::new_perspective(
             (width as f32) / (height as f32),
             45.0f32.to_radians(),
-            0.005,
+            near_plane,
             1000.0,
         );
 
@@ -798,7 +799,13 @@ impl AppState {
                     selected_body_idx = hovered;
                     follow_camera = true;
                     let radius = body_radii[hovered];
-                    camera_distance = (radius * 100.0).clamp(0.005, 300.0);
+                    let b_type = body_types.get(hovered).copied().unwrap_or(101);
+                    let is_satellite = b_type >= 12 && b_type <= 14;
+                    camera_distance = if is_satellite {
+                        (radius * 12.0).clamp(0.00005, 300.0)
+                    } else {
+                        (radius * 100.0).clamp(0.005, 300.0)
+                    };
                 } else {
                     follow_camera = false;
                 }
@@ -863,7 +870,13 @@ impl AppState {
                                     current = i;
                                     if follow_camera {
                                         let radius = body_radii[i];
-                                        camera_distance = (radius * 100.0).clamp(0.005, 300.0);
+                                        let b_type = body_types.get(i).copied().unwrap_or(101);
+                                        let is_satellite = b_type >= 12 && b_type <= 14;
+                                        camera_distance = if is_satellite {
+                                            (radius * 12.0).clamp(0.00005, 300.0)
+                                        } else {
+                                            (radius * 100.0).clamp(0.005, 300.0)
+                                        };
                                     }
                                 }
                             }
@@ -875,7 +888,13 @@ impl AppState {
                     if ui.checkbox("Follow Camera", &mut follow_camera) {
                         if follow_camera {
                             let radius = body_radii[current];
-                            camera_distance = (radius * 100.0).clamp(0.005, 300.0);
+                            let b_type = body_types.get(current).copied().unwrap_or(101);
+                            let is_satellite = b_type >= 12 && b_type <= 14;
+                            camera_distance = if is_satellite {
+                                (radius * 12.0).clamp(0.00005, 300.0)
+                            } else {
+                                (radius * 100.0).clamp(0.005, 300.0)
+                            };
                         }
                     }
                     
@@ -1375,9 +1394,9 @@ impl ApplicationHandler for AstroSimApp {
                         MouseScrollDelta::PixelDelta(pos) => (pos.y / 30.0) as f32,
                     };
                     if y > 0.0 {
-                        state.camera_distance = (state.camera_distance * 0.85_f32.powf(y)).clamp(0.001, 300.0);
+                        state.camera_distance = (state.camera_distance * 0.85_f32.powf(y)).clamp(0.00001, 300.0);
                     } else if y < 0.0 {
-                        state.camera_distance = (state.camera_distance * 1.15_f32.powf(-y)).clamp(0.001, 300.0);
+                        state.camera_distance = (state.camera_distance * 1.15_f32.powf(-y)).clamp(0.00001, 300.0);
                     }
                 }
             }
