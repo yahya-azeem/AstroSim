@@ -137,8 +137,8 @@ pub fn get_planet_state(idx: usize, jd: f64) -> (Vector3<f64>, Vector3<f64>) {
     
     let pos = Vector3::new(
         x_plane * r11 + y_plane * r12,
-        x_plane * r21 + y_plane * r22,
         x_plane * r31 + y_plane * r32,
+        x_plane * r21 + y_plane * r22,
     );
     
     // Velocities
@@ -152,8 +152,8 @@ pub fn get_planet_state(idx: usize, jd: f64) -> (Vector3<f64>, Vector3<f64>) {
     
     let vel = Vector3::new(
         vx_plane * r11 + vy_plane * r12,
-        vx_plane * r21 + vy_plane * r22,
         vx_plane * r31 + vy_plane * r32,
+        vx_plane * r21 + vy_plane * r22,
     );
     
     (pos, vel)
@@ -244,8 +244,8 @@ pub fn get_keplerian_body_state(
     
     let rel_pos = Vector3::new(
         x_plane * r11 + y_plane * r12,
-        x_plane * r21 + y_plane * r22,
         x_plane * r31 + y_plane * r32,
+        x_plane * r21 + y_plane * r22,
     );
     
     let n = 2.0 * std::f64::consts::PI / body.period;
@@ -256,8 +256,8 @@ pub fn get_keplerian_body_state(
     
     let rel_vel = Vector3::new(
         vx_plane * r11 + vy_plane * r12,
-        vx_plane * r21 + vy_plane * r22,
         vx_plane * r31 + vy_plane * r32,
+        vx_plane * r21 + vy_plane * r22,
     );
     
     (parent_pos + rel_pos, parent_vel + rel_vel)
