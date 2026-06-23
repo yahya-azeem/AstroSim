@@ -150,8 +150,8 @@ fn fs_skybox(in: SkyboxOutput) -> @location(0) vec4<f32> {
     let nebula1 = vec3<f32>(0.005, 0.002, 0.01) * n1; // Faint dark cosmic dust
     
     // Calculate God Rays from the Sun (at origin/bodies_pos_mass[0])
-    let cam_pos4 = ubo.inv_view_proj * vec4<f32>(0.0, 0.0, 0.0, 1.0);
-    let cam_pos = cam_pos4.xyz / cam_pos4.w;
+    let R = mat3x3<f32>(ubo.view[0].xyz, ubo.view[1].xyz, ubo.view[2].xyz);
+    let cam_pos = -transpose(R) * ubo.view[3].xyz;
     let sun_dir = normalize(ubo.bodies_pos_mass[0].xyz - cam_pos);
     let cos_theta = dot(dir, sun_dir);
     
@@ -269,6 +269,83 @@ fn vs_sphere(
     return out;
 }
 
+const EARTH_MAP: array<u32, 256> = array<u32, 256>(
+    0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u,
+    0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u,
+    0x00000000u, 0x00ff01f8u, 0x00000000u, 0x00000000u,
+    0xc0000000u, 0x01ffff7fu, 0x000003c0u, 0x00000006u,
+    0x00600000u, 0x01ffff0eu, 0x00000020u, 0x00000030u,
+    0x00000000u, 0x01fff003u, 0x80100000u, 0x0000007fu,
+    0x77d80000u, 0x00fff03fu, 0xff0c0000u, 0x001c3fffu,
+    0xc93fffe0u, 0x007fc0e5u, 0xfb401fc0u, 0xefffffffu,
+    0xffffffefu, 0x0607e3c1u, 0xffffaff0u, 0xffffffffu,
+    0xffffffc8u, 0x0001c1c0u, 0xffffff78u, 0xffffffffu,
+    0x3ffff7e0u, 0x00010070u, 0xffffff3cu, 0x1c7fffffu,
+    0x7fff0300u, 0x400003e0u, 0xfffffe30u, 0x0303ffffu,
+    0xfffc0000u, 0xe00007f7u, 0xffffff88u, 0x0380ffffu,
+    0xfff80000u, 0xc0000ff7u, 0xffffffffu, 0x0007ffffu,
+    0xfff80000u, 0x800018ffu, 0xffffffffu, 0x0007ffffu,
+    0xfff00000u, 0x800007ffu, 0xfff9dfffu, 0x0005ffffu,
+    0xfff00000u, 0xa000007fu, 0xfffdc3d7u, 0x000cffffu,
+    0xfff00000u, 0xe000003fu, 0xfffbffa0u, 0x00003fffu,
+    0xfff00000u, 0xe000001fu, 0xfff9ff10u, 0x000233ffu,
+    0xffe00000u, 0xc000001fu, 0xffffe00fu, 0x0003a3ffu,
+    0xffc00000u, 0xe0000007u, 0xfffff09fu, 0x000047ffu,
+    0xbf000000u, 0xf0000004u, 0xfffdffffu, 0x000007ffu,
+    0x1e000000u, 0xf8000018u, 0xfffbefffu, 0x000007ffu,
+    0x1c000000u, 0xfc000000u, 0xff0fdfffu, 0x000003ffu,
+    0x18000000u, 0xfc000011u, 0x7e1fdfffu, 0x0000003eu,
+    0xb8000000u, 0xfc000151u, 0x3c0fbfffu, 0x0000003cu,
+    0x80000000u, 0xfc000003u, 0x0c03bfffu, 0x00000078u,
+    0x00000000u, 0xfc000002u, 0x0800ffffu, 0x00000078u,
+    0x00000000u, 0xf80003a4u, 0x0803ffffu, 0x00000020u,
+    0x00000000u, 0xf00007f0u, 0x1003ffffu, 0x00001008u,
+    0x00000000u, 0x00003ff0u, 0x0001fff8u, 0x00000214u,
+    0x00000000u, 0x00003ff0u, 0x0000fff8u, 0x00003388u,
+    0x00000000u, 0x0000fff8u, 0x00007ff8u, 0x00008d90u,
+    0x00000000u, 0x0007fff8u, 0x00003ff0u, 0x000f0830u,
+    0x00000000u, 0x000ffff0u, 0x00003fe0u, 0x000e00c0u,
+    0x00000000u, 0x0007fff0u, 0x00003fe0u, 0x00100400u,
+    0x00000000u, 0x0003ffe0u, 0x00023fe0u, 0x0005c000u,
+    0x00000000u, 0x0003ffe0u, 0x00023ff0u, 0x000cf000u,
+    0x00000000u, 0x0003ff80u, 0x00031ff0u, 0x000ff800u,
+    0x00000000u, 0x0001ff80u, 0x00010fe0u, 0x001ffe00u,
+    0x00000000u, 0x0000ff80u, 0x00011fe0u, 0x003fff00u,
+    0x00000000u, 0x00007f80u, 0x00000fe0u, 0x003fff00u,
+    0x00000000u, 0x00003f80u, 0x000007c0u, 0x007ffe00u,
+    0x00000000u, 0x00001f80u, 0x000003c0u, 0x003f1e00u,
+    0x00000000u, 0x00000fc0u, 0x00000000u, 0x003e0000u,
+    0x00000000u, 0x00000fc0u, 0x00000000u, 0x40140000u,
+    0x00000000u, 0x000003c0u, 0x00000000u, 0x40080000u,
+    0x00000000u, 0x000001c0u, 0x00000000u, 0x10000000u,
+    0x00000000u, 0x000000e0u, 0x00000000u, 0x00000000u,
+    0x00000000u, 0x000000e0u, 0x01000000u, 0x00000000u,
+    0x00000000u, 0x000004e0u, 0x00000000u, 0x00000000u,
+    0x00000000u, 0x00000180u, 0x00000000u, 0x00000000u,
+    0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u,
+    0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u,
+    0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u,
+    0x00000000u, 0x00000200u, 0x00080000u, 0x00000110u,
+    0x00000000u, 0x00000100u, 0xf1ff9000u, 0x007fffffu,
+    0x00000000u, 0xf00003e0u, 0xfeffffffu, 0x1fffffffu,
+    0xf1ff8000u, 0xfc0003ffu, 0xffffffffu, 0x07ffffffu,
+    0xffffff00u, 0xffe0001fu, 0xffffffffu, 0x03ffffffu,
+    0xfffff000u, 0xffc0e41fu, 0xffffffffu, 0x01ffffffu,
+    0xfffffc00u, 0xfffff7ffu, 0xffffffffu, 0x07ffffffu,
+    0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u,
+    0x00000000u, 0x00000000u, 0x00000000u, 0x00000000u,
+);
+
+fn get_earth_land(uv: vec2<f32>) -> bool {
+    let r = clamp(i32(uv.y * 64.0), 0, 63);
+    let u = (uv.x + 0.5) % 1.0;
+    let c = clamp(i32((1.0 - u) * 128.0), 0, 127);
+    let word_idx = r * 4 + (c / 32);
+    let bit_idx = u32(c % 32);
+    let word = EARTH_MAP[word_idx];
+    return ((word >> bit_idx) & 1u) == 1u;
+}
+
 @fragment
 fn fs_sphere(in: SphereOutput) -> @location(0) vec4<f32> {
     let N = normalize(in.normal);
@@ -310,15 +387,31 @@ fn fs_sphere(in: SphereOutput) -> @location(0) vec4<f32> {
         let n = fbm(N * 6.0);
         albedo = mix(vec3<f32>(0.85, 0.7, 0.45), vec3<f32>(0.95, 0.85, 0.6), n);
     } else if (b_type == 3u) {
-        let n = fbm(N * 10.0);
-        let clouds = fbm(N * 14.0 + vec3<f32>(1.2, 0.0, 0.5));
-        if (n > 0.46) {
-            albedo = mix(vec3<f32>(0.2, 0.5, 0.25), vec3<f32>(0.4, 0.35, 0.25), (n - 0.46) * 4.0);
+        let is_land = get_earth_land(in.uv);
+        let clouds = fbm(N * 13.0 + vec3<f32>(ubo.time * 0.02, 0.0, -ubo.time * 0.01));
+        
+        if (is_land) {
+            let lat_factor = abs(N.y);
+            let height_noise = fbm(N * 18.0);
+            
+            var land_color = mix(vec3<f32>(0.15, 0.38, 0.18), vec3<f32>(0.42, 0.34, 0.22), height_noise);
+            if (lat_factor > 0.82) {
+                land_color = mix(land_color, vec3<f32>(0.95, 0.95, 0.98), smoothstep(0.82, 0.92, lat_factor));
+            } else if (lat_factor < 0.35) {
+                let desert_noise = fbm(N * 6.0);
+                if (desert_noise > 0.42) {
+                    land_color = mix(land_color, vec3<f32>(0.58, 0.52, 0.38), (desert_noise - 0.42) * 1.8);
+                }
+            }
+            albedo = land_color;
         } else {
-            albedo = vec3<f32>(0.08, 0.25, 0.65);
+            let shelf = fbm(N * 16.0);
+            albedo = mix(vec3<f32>(0.03, 0.12, 0.38), vec3<f32>(0.06, 0.22, 0.52), shelf * 0.45);
         }
-        if (clouds > 0.55) {
-            albedo = mix(albedo, vec3<f32>(0.95), (clouds - 0.55) * 2.0);
+        
+        if (clouds > 0.52) {
+            let cloud_opacity = clamp((clouds - 0.52) * 2.5, 0.0, 0.85);
+            albedo = mix(albedo, vec3<f32>(0.92, 0.92, 0.95), cloud_opacity);
         }
     } else if (b_type == 4u) {
         let n = fbm(N * 12.0);
