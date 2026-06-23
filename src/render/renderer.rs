@@ -151,7 +151,7 @@ fn fs_skybox(in: SkyboxOutput) -> @location(0) vec4<f32> {
     
     // Calculate God Rays from the Sun (at origin/bodies_pos_mass[0])
     let R = mat3x3<f32>(ubo.view[0].xyz, ubo.view[1].xyz, ubo.view[2].xyz);
-    let cam_pos = -transpose(R) * ubo.view[3].xyz;
+    let cam_pos = transpose(R) * -ubo.view[3].xyz;
     let sun_dir = normalize(ubo.bodies_pos_mass[0].xyz - cam_pos);
     let cos_theta = dot(dir, sun_dir);
     
