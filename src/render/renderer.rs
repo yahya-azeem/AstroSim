@@ -37,7 +37,8 @@ pub struct UniformBufferObject {
     pub bodies: [BodyUbo; 10],
     pub num_bodies: i32,
     pub time: f32,
-    pub _padding: [f32; 2],
+    pub star_radius: f32,
+    pub _padding: f32,
 }
 
 pub struct OrbitParams {
@@ -55,6 +56,7 @@ struct Uniforms {
     bodies_pos_mass: array<vec4<f32>, 10>,
     num_bodies: i32,
     time: f32,
+    star_radius: f32,
 }
 
 struct PushConstants {
@@ -154,6 +156,7 @@ fn fs_skybox(in: SkyboxOutput) -> @location(0) vec4<f32> {
     let cam_pos = transpose(R) * -ubo.view[3].xyz;
     let sun_dir = normalize(ubo.bodies_pos_mass[0].xyz - cam_pos);
     let cos_theta = dot(dir, sun_dir);
+    let d = length(ubo.bodies_pos_mass[0].xyz - cam_pos);
     
     var god_rays = vec3<f32>(0.0);
     if (cos_theta > 0.0) {
@@ -165,11 +168,19 @@ fn fs_skybox(in: SkyboxOutput) -> @location(0) vec4<f32> {
         var ray_noise = mix(ray_noise1, ray_noise2, 0.35);
         ray_noise = pow(ray_noise, 2.2) * 2.5; // High contrast sharp rays!
         
-        let sun_halo = pow(cos_theta, 350.0) * 18.0; // Tighter, brighter inner solar corona
-        let outer_halo = pow(cos_theta, 12.0) * 3.5; // Soft volumetric scattering
+        // Dynamically scale angular spread based on the angular size of the star
+        let theta_star = ubo.star_radius / d;
+        let p_inner = 350.0 / (theta_star * 6.0 + 0.1);
+        let p_outer = 12.0 / (theta_star * 6.0 + 0.1);
+        
+        let sun_halo = pow(cos_theta, p_inner) * 18.0; 
+        let outer_halo = pow(cos_theta, p_outer) * 3.5; 
+        
+        // Scale intensity based on distance and star size
+        let intensity_factor = clamp((ubo.star_radius / 0.163) * 0.6 / (d + 0.4), 0.02, 1.5);
         
         let ray_col = vec3<f32>(1.0, 0.72, 0.4); // Golden solar light
-        god_rays = ray_col * (sun_halo * (ray_noise * 1.5 + 0.2) + outer_halo * (ray_noise * 1.1 + 0.1)) * 0.85;
+        god_rays = ray_col * (sun_halo * (ray_noise * 1.5 + 0.2) + outer_halo * (ray_noise * 1.1 + 0.1)) * 0.85 * intensity_factor;
     }
     
     var final_color = star_rgb + nebula1 + god_rays;
@@ -1065,7 +1076,8 @@ impl Renderer {
             bodies,
             num_bodies: num_bodies as i32,
             time,
-            _padding: [0.0; 2],
+            star_radius: body_radii.first().copied().unwrap_or(0.163),
+            _padding: 0.0,
         };
         self.queue.write_buffer(&self.ubo_buffer, 0, bytemuck::bytes_of(&ubo));
 
