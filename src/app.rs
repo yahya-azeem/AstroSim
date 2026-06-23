@@ -69,6 +69,7 @@ pub struct AppState {
     left_click_occurred: bool,
     current_jd: f64,
     keplerian_bodies: Vec<crate::physics::kepler::KeplerianBody>,
+    realtime_speed: bool,
 }
 
 impl AppState {
@@ -187,6 +188,7 @@ impl AppState {
             left_click_occurred: false,
             current_jd: 2451545.0,
             keplerian_bodies: Vec::new(),
+            realtime_speed: true,
         };
 
         state.load_preset_solar_system();
@@ -378,6 +380,7 @@ impl AppState {
         self.camera_target = Vector3::zeros();
         self.follow_camera = false;
         self.hovered_body_idx = None;
+        self.realtime_speed = true;
     }
 
     fn trigger_fetch(&mut self, query: String) {
@@ -453,6 +456,9 @@ impl AppState {
 
         // Step physics engine
         let capped_dt = dt.min(0.1);
+        if self.realtime_speed {
+            self.sim_speed = 1.0 / 86400.0;
+        }
         if !self.paused {
             let sim_dt = capped_dt * 86400.0 * self.sim_speed; 
             self.physics_engine.step(sim_dt);
@@ -504,16 +510,10 @@ impl AppState {
 
         // Keyboard camera updates
         if !self.imgui.io().want_capture_keyboard {
-            if self.pressed_keys.contains(&KeyCode::ArrowLeft)
-                || self.pressed_keys.contains(&KeyCode::ArrowRight)
-                || self.pressed_keys.contains(&KeyCode::ArrowUp)
-                || self.pressed_keys.contains(&KeyCode::ArrowDown)
-                || self.pressed_keys.contains(&KeyCode::KeyW)
+            if self.pressed_keys.contains(&KeyCode::KeyW)
                 || self.pressed_keys.contains(&KeyCode::KeyS)
                 || self.pressed_keys.contains(&KeyCode::KeyA)
                 || self.pressed_keys.contains(&KeyCode::KeyD)
-                || self.pressed_keys.contains(&KeyCode::KeyQ)
-                || self.pressed_keys.contains(&KeyCode::KeyE)
             {
                 self.follow_camera = false;
             }
@@ -567,36 +567,6 @@ impl AppState {
                 (p_si.z / au) as f32,
             );
             self.camera_target = target_pos;
-            
-            let p_star = if !positions.is_empty() {
-                positions[0]
-            } else {
-                Vector3::zeros()
-            };
-
-            let rel_pos_f64 = p_si - p_star;
-            let rel_pos = Vector3::new(
-                (rel_pos_f64.x / au) as f32,
-                (rel_pos_f64.y / au) as f32,
-                (rel_pos_f64.z / au) as f32,
-            );
-            let dir_cam = if current > 0 && rel_pos.norm_squared() > 1e-6 {
-                let r_norm = rel_pos.normalize();
-                let tangent = Vector3::new(rel_pos.z, 0.0, -rel_pos.x).normalize();
-                
-                let offset_horiz = (r_norm * 0.95 + tangent * 0.15).normalize();
-                (offset_horiz + Vector3::y() * 0.26).normalize()
-            } else {
-                let yaw_rad = self.camera_yaw.to_radians();
-                let dir_behind = Vector3::new(yaw_rad.sin(), 0.0, yaw_rad.cos());
-                (dir_behind + Vector3::y() * 0.26).normalize()
-            };
-            
-            let pitch_rad = dir_cam.y.asin();
-            let yaw_rad = dir_cam.x.atan2(dir_cam.z);
-            
-            self.camera_pitch = pitch_rad.to_degrees().clamp(-85.0, 85.0);
-            self.camera_yaw = yaw_rad.to_degrees();
         }
 
         // Compute View, Projection, and VP matrices
@@ -734,6 +704,8 @@ impl AppState {
 
         let active_system_name = self.active_system_name.clone();
         let mut selected_body_idx = self.selected_body_idx;
+        let mut follow_camera = self.follow_camera;
+        let mut camera_distance = self.camera_distance;
         let body_names = body_names.clone();
 
         #[cfg(not(target_arch = "wasm32"))]
@@ -753,11 +725,11 @@ impl AppState {
             if current_left_click && !ui.io().want_capture_mouse {
                 if let Some(hovered) = self.hovered_body_idx {
                     selected_body_idx = hovered;
-                    self.follow_camera = true;
+                    follow_camera = true;
                     let radius = body_radii[hovered];
-                    self.camera_distance = (radius * 100.0).clamp(0.005, 300.0);
+                    camera_distance = (radius * 100.0).clamp(0.005, 300.0);
                 } else {
-                    self.follow_camera = false;
+                    follow_camera = false;
                 }
             }
 
@@ -773,7 +745,18 @@ impl AppState {
                     ui.separator();
                     
                     ui.checkbox("Pause Simulation", &mut paused);
-                    ui.slider("Sim Speed (Days/Sec)", 0.0, 100.0, &mut sim_speed);
+                    
+                    let mut realtime = self.realtime_speed;
+                    if ui.checkbox("Real-Time Orbit Speed (1x)", &mut realtime) {
+                        self.realtime_speed = realtime;
+                    }
+                    
+                    if self.realtime_speed {
+                        ui.text_disabled("Sim Speed: Locked to 1.0x Real-Time");
+                    } else {
+                        ui.slider("Sim Speed (Days/Sec)", 0.0, 100.0, &mut sim_speed);
+                    }
+                    
                     ui.slider("Gravity Well Warp", 0.01, 10.0, &mut visual_warp);
                     
                     if !self.keplerian_bodies.is_empty() {
@@ -790,7 +773,9 @@ impl AppState {
                 });
             
             self.paused = paused;
-            self.sim_speed = sim_speed as f64;
+            if !self.realtime_speed {
+                self.sim_speed = sim_speed as f64;
+            }
             self.visual_warp_factor = visual_warp;
 
             // 2. Entity Inspector Panel
@@ -805,11 +790,23 @@ impl AppState {
                             if i < physics_bodies_len || i == current {
                                 if ui.selectable(&body_names[i]) {
                                     current = i;
+                                    if follow_camera {
+                                        let radius = body_radii[i];
+                                        camera_distance = (radius * 100.0).clamp(0.005, 300.0);
+                                    }
                                 }
                             }
                         }
                     }
                     selected_body_idx = current;
+                    
+                    ui.same_line();
+                    if ui.checkbox("Follow Camera", &mut follow_camera) {
+                        if follow_camera {
+                            let radius = body_radii[current];
+                            camera_distance = (radius * 100.0).clamp(0.005, 300.0);
+                        }
+                    }
                     
                     ui.separator();
                     
@@ -985,6 +982,8 @@ impl AppState {
         }
 
         self.selected_body_idx = selected_body_idx;
+        self.follow_camera = follow_camera;
+        self.camera_distance = camera_distance;
 
         if action_load_solar {
             self.load_preset_solar_system();
@@ -1280,7 +1279,6 @@ impl ApplicationHandler for AstroSimApp {
                 if state.right_mouse_down && !state.imgui.io().want_capture_mouse {
                     state.camera_yaw += dx * 0.25;
                     state.camera_pitch = (state.camera_pitch + dy * 0.25).clamp(-85.0, 85.0);
-                    state.follow_camera = false;
                 }
             }
             WindowEvent::MouseInput { state: button_state, button, .. } => {
@@ -1309,7 +1307,6 @@ impl ApplicationHandler for AstroSimApp {
                     } else if y < 0.0 {
                         state.camera_distance = (state.camera_distance * 1.15_f32.powf(-y)).clamp(0.001, 300.0);
                     }
-                    state.follow_camera = false;
                 }
             }
             WindowEvent::RedrawRequested => {
