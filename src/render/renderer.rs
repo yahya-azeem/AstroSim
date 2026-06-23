@@ -397,7 +397,7 @@ fn fs_sphere(in: SphereOutput) -> @location(0) vec4<f32> {
     let diff = max(dot(N, L), 0.0);
     let d_au = distance(light_pos, in.world_pos);
     let intensity = clamp(1.5 / (d_au + 0.5), 0.08, 3.0);
-    let ambient = 0.001;
+    let ambient = 0.0;
     var albedo = vec3<f32>(0.8);
     var glow = 0.0;
     var alpha = 1.0;
@@ -538,8 +538,8 @@ fn fs_sphere(in: SphereOutput) -> @location(0) vec4<f32> {
     } else {
         let lat = N.y;
         let band = sin(lat * 25.0 + fbm(N * 4.0));
-        let col1 = vec3<f32>(0.3, 0.45, 0.6);
-        let col2 = vec3<f32>(0.15, 0.2, 0.35);
+        let col1 = vec3<f32>(0.55, 0.5, 0.45);
+        let col2 = vec3<f32>(0.35, 0.3, 0.25);
         albedo = mix(col1, col2, (band + 1.0) * 0.5);
     }
     var spec = 0.0;
@@ -565,7 +565,7 @@ fn fs_sphere(in: SphereOutput) -> @location(0) vec4<f32> {
     if (in.is_selected == 1u) {
         let V = normalize(in.view_dir);
         let rim = 1.0 - max(dot(N, V), 0.0);
-        let rim_glow = pow(rim, 4.0) * 1.5;
+        let rim_glow = pow(rim, 28.0) * 1.5; // Very sharp selection ring
         color = color + vec3<f32>(0.0, 0.8, 1.0) * rim_glow;
     }
     return vec4<f32>(color, alpha);
@@ -1253,9 +1253,9 @@ impl Renderer {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.03,
-                            g: 0.03,
-                            b: 0.06,
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
