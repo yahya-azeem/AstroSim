@@ -230,12 +230,30 @@ impl AppState {
         let starting_jd = 2440587.5 + (ms_since_1970 / 86400000.0);
         self.current_jd = starting_jd;
 
+        let au = 1.495978707e11_f64;
+
         // Initialize Sun (index 0)
         self.physics_engine.add_body(Vector3::zeros(), Vector3::zeros(), 1.989e30);
         self.body_names.push("Sun".to_string());
         self.body_radii.push(0.163);
         self.body_types.push(0);
-        self.history_trails.push(std::collections::VecDeque::with_capacity(1000));
+        
+        let mut sun_trail = std::collections::VecDeque::with_capacity(1000);
+        for _ in 0..1000 {
+            sun_trail.push_back(Vector3::zeros());
+        }
+        self.history_trails.push(sun_trail);
+
+        let planet_periods = [
+            87.969,    // Mercury
+            224.701,   // Venus
+            365.256,   // Earth
+            686.980,   // Mars
+            4332.589,  // Jupiter
+            10759.22,  // Saturn
+            30688.5,   // Uranus
+            60182.0,   // Neptune
+        ];
 
         // Initialize planets 1 to 8 using J2000 Keplerian elements
         for idx in 0..8 {
@@ -257,7 +275,20 @@ impl AppState {
             self.body_names.push(name.to_string());
             self.body_radii.push(radius);
             self.body_types.push(body_type);
-            self.history_trails.push(std::collections::VecDeque::with_capacity(1000));
+            
+            let period_days = planet_periods[idx];
+            let mut trail = std::collections::VecDeque::with_capacity(1000);
+            for step_i in 0..1000 {
+                let jd_step = starting_jd - period_days + (step_i as f64 / 1000.0) * period_days;
+                let (pos_step, _) = crate::physics::kepler::get_planet_state(idx, jd_step);
+                let p_render = Vector3::new(
+                    (pos_step.x / au) as f32,
+                    (pos_step.y / au) as f32,
+                    (pos_step.z / au) as f32,
+                );
+                trail.push_back(p_render);
+            }
+            self.history_trails.push(trail);
         }
 
         // Procedural LCG random generator for Asteroid Belt
@@ -411,12 +442,52 @@ impl AppState {
                 self.history_trails.clear();
                 self.keplerian_bodies.clear();
                 
-                for (name, pos, vel, mass, radius, body_type) in bodies {
+                let au = 1.495978707e11_f64;
+                let star_pos = if !bodies.is_empty() { bodies[0].1 } else { Vector3::zeros() };
+                for (i, (name, pos, vel, mass, radius, body_type)) in bodies.into_iter().enumerate() {
                     self.physics_engine.add_body(pos, vel, mass);
                     self.body_names.push(name);
                     self.body_radii.push(radius);
                     self.body_types.push(body_type);
-                    self.history_trails.push(std::collections::VecDeque::with_capacity(1000));
+                    
+                    let mut trail = std::collections::VecDeque::with_capacity(1000);
+                    if i == 0 {
+                        for _ in 0..1000 {
+                            trail.push_back(Vector3::new(
+                                (pos.x / au) as f32,
+                                (pos.y / au) as f32,
+                                (pos.z / au) as f32,
+                            ));
+                        }
+                    } else {
+                        let rel_pos = pos - star_pos;
+                        let r = rel_pos.norm();
+                        if r > 0.0 {
+                            let angle_start = rel_pos.z.atan2(rel_pos.x);
+                            for step_i in 0..1000 {
+                                let theta = angle_start + (step_i as f64 / 1000.0) * 2.0 * std::f64::consts::PI;
+                                let p_step = star_pos + Vector3::new(
+                                    r * theta.cos(),
+                                    rel_pos.y,
+                                    r * theta.sin(),
+                                );
+                                trail.push_back(Vector3::new(
+                                    (p_step.x / au) as f32,
+                                    (p_step.y / au) as f32,
+                                    (p_step.z / au) as f32,
+                                ));
+                            }
+                        } else {
+                            for _ in 0..1000 {
+                                trail.push_back(Vector3::new(
+                                    (pos.x / au) as f32,
+                                    (pos.y / au) as f32,
+                                    (pos.z / au) as f32,
+                                ));
+                            }
+                        }
+                    }
+                    self.history_trails.push(trail);
                 }
                 
                 self.selected_body_idx = 0;
