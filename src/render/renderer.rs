@@ -508,6 +508,14 @@ fn fs_sphere(in: SphereOutput) -> @location(0) vec4<f32> {
         let opacity = (0.3 + 0.55 * band) * (1.0 - gap1);
         albedo = mix(vec3<f32>(0.65, 0.58, 0.5), vec3<f32>(0.85, 0.8, 0.72), band);
         alpha = opacity;
+    } else if (b_type == 10u) {
+        let n = fbm(N * 12.0);
+        let base_col = mix(vec3<f32>(0.22, 0.20, 0.20), vec3<f32>(0.55, 0.32, 0.22), n);
+        let spot_pos = normalize(vec3<f32>(0.5, -0.15, 0.6));
+        let dist_spot = distance(N, spot_pos);
+        let heart_noise = fbm(N * 15.0);
+        let heart_shape = smoothstep(0.24, 0.12, dist_spot + 0.04 * heart_noise);
+        albedo = mix(base_col, vec3<f32>(0.92, 0.88, 0.85), heart_shape);
     } else if (b_type == 11u) {
         let n = fbm(N * 20.0);
         albedo = vec3<f32>(0.4 + 0.15 * n, 0.38 + 0.12 * n, 0.36 + 0.1 * n);
@@ -531,6 +539,15 @@ fn fs_sphere(in: SphereOutput) -> @location(0) vec4<f32> {
                 glow = 0.4;
             }
         }
+    } else if (b_type == 15u) {
+        let n = fbm(N * 25.0);
+        albedo = vec3<f32>(0.88, 0.92, 0.95) + vec3<f32>(0.05 * n);
+    } else if (b_type == 16u) {
+        let n = fbm(N * 18.0);
+        albedo = mix(vec3<f32>(0.75, 0.78, 0.82), vec3<f32>(0.85, 0.88, 0.92), n);
+    } else if (b_type == 17u) {
+        let n = fbm(N * 14.0);
+        albedo = mix(vec3<f32>(0.65, 0.28, 0.15), vec3<f32>(0.5, 0.18, 0.1), n);
     } else if (b_type == 100u) {
         let n = fbm(N * 12.0);
         albedo = mix(vec3<f32>(0.2, 0.55, 1.0), vec3<f32>(0.4, 0.75, 1.0), n);
@@ -554,6 +571,10 @@ fn fs_sphere(in: SphereOutput) -> @location(0) vec4<f32> {
         let V = normalize(in.view_dir);
         let H = normalize(L + V);
         spec = pow(max(dot(N, H), 0.0), 16.0) * 0.8;
+    } else if (b_type == 15u) {
+        let V = normalize(in.view_dir);
+        let H = normalize(L + V);
+        spec = pow(max(dot(N, H), 0.0), 32.0) * 0.9;
     }
 
     var color = vec3<f32>(0.0);
@@ -1164,7 +1185,11 @@ impl Renderer {
             };
             let visual_radius = radius.max(dist * min_size_factor);
             
-            let scale = nalgebra::Matrix4::new_scaling(visual_radius);
+            let scale = if b_type == 16 {
+                nalgebra::Matrix4::new_nonuniform_scaling(&Vector3::new(visual_radius * 1.4, visual_radius * 0.9, visual_radius * 0.7))
+            } else {
+                nalgebra::Matrix4::new_scaling(visual_radius)
+            };
             let translation = nalgebra::Matrix4::new_translation(&Vector3::new(p[0], p[1], p[2]));
             let model = translation * scale;
             

@@ -1,6 +1,6 @@
 use nalgebra::Vector3;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, serde::Deserialize)]
 pub struct KeplerElements {
     pub a0: f64, pub a_dot: f64,
     pub e0: f64, pub e_dot: f64,
@@ -10,83 +10,7 @@ pub struct KeplerElements {
     pub omega0: f64, pub omega_dot: f64,
 }
 
-pub const PLANET_ELEMENTS: [KeplerElements; 8] = [
-    // Mercury
-    KeplerElements {
-        a0: 0.38709927, a_dot: 0.00000037,
-        e0: 0.20563593, e_dot: 0.00001906,
-        i0: 7.00497902, i_dot: -0.00594749,
-        L0: 252.25032350, L_dot: 149472.67411175,
-        varpi0: 77.45779628, varpi_dot: 0.16047689,
-        omega0: 48.33076593, omega_dot: -0.12534081,
-    },
-    // Venus
-    KeplerElements {
-        a0: 0.72333566, a_dot: 0.00000390,
-        e0: 0.00677672, e_dot: -0.00004107,
-        i0: 3.39467605, i_dot: -0.00078890,
-        L0: 181.97909950, L_dot: 58517.81538729,
-        varpi0: 131.60246718, varpi_dot: 0.00268329,
-        omega0: 76.67984255, omega_dot: -0.27769418,
-    },
-    // Earth-Moon Barycenter (representing Earth)
-    KeplerElements {
-        a0: 1.00000261, a_dot: 0.00000562,
-        e0: 0.01671123, e_dot: -0.00004392,
-        i0: -0.00001531, i_dot: -0.01294668,
-        L0: 100.46457166, L_dot: 35999.37244981,
-        varpi0: 102.93768193, varpi_dot: 0.32327364,
-        omega0: 0.0, omega_dot: 0.0,
-    },
-    // Mars
-    KeplerElements {
-        a0: 1.52371034, a_dot: 0.00001847,
-        e0: 0.09339410, e_dot: 0.00007882,
-        i0: 1.84969142, i_dot: -0.00813131,
-        L0: -4.55343205, L_dot: 19140.30268499,
-        varpi0: -23.94362959, varpi_dot: 0.44441088,
-        omega0: 49.55953891, omega_dot: -0.29257343,
-    },
-    // Jupiter
-    KeplerElements {
-        a0: 5.20288700, a_dot: -0.00011607,
-        e0: 0.04838624, e_dot: -0.00013253,
-        i0: 1.30439695, i_dot: -0.00183714,
-        L0: 34.39644051, L_dot: 3034.74612775,
-        varpi0: 14.72847983, varpi_dot: 0.21252668,
-        omega0: 100.47390909, omega_dot: 0.20469106,
-    },
-    // Saturn
-    KeplerElements {
-        a0: 9.53667594, a_dot: -0.00125060,
-        e0: 0.05386179, e_dot: -0.00050991,
-        i0: 2.48599187, i_dot: 0.00193609,
-        L0: 49.95424423, L_dot: 1222.49362201,
-        varpi0: 92.59887831, varpi_dot: -0.41897216,
-        omega0: 113.66242448, omega_dot: -0.28867794,
-    },
-    // Uranus
-    KeplerElements {
-        a0: 19.18916464, a_dot: -0.00196176,
-        e0: 0.04725744, e_dot: -0.00004397,
-        i0: 0.77263783, i_dot: -0.00242939,
-        L0: 313.23810451, L_dot: 428.48202785,
-        varpi0: 170.95427630, varpi_dot: 0.40805281,
-        omega0: 74.01692503, omega_dot: 0.04240589,
-    },
-    // Neptune
-    KeplerElements {
-        a0: 30.06992276, a_dot: 0.00026291,
-        e0: 0.00859048, e_dot: 0.00005105,
-        i0: 1.77004347, i_dot: 0.00035372,
-        L0: -55.12002969, L_dot: 218.45945325,
-        varpi0: 44.96476227, varpi_dot: -0.32241464,
-        omega0: 131.78422574, omega_dot: -0.00508664,
-    },
-];
-
-pub fn get_planet_state(idx: usize, jd: f64) -> (Vector3<f64>, Vector3<f64>) {
-    let elements = PLANET_ELEMENTS[idx];
+pub fn get_orbit_state(elements: &KeplerElements, jd: f64, parent_mass: f64) -> (Vector3<f64>, Vector3<f64>) {
     let t = (jd - 2451545.0) / 36525.0; // Julian centuries since J2000.0
     
     let a = elements.a0 + elements.a_dot * t;
@@ -143,8 +67,7 @@ pub fn get_planet_state(idx: usize, jd: f64) -> (Vector3<f64>, Vector3<f64>) {
     
     // Velocities
     let g = 6.67430e-11;
-    let m_sun = 1.989e30;
-    let n = (g * m_sun / (a_m * a_m * a_m)).sqrt();
+    let n = (g * parent_mass / (a_m * a_m * a_m)).sqrt();
     let r = a_m * (1.0 - e * eccentric_anomaly.cos());
     
     let vx_plane = (-a_m * a_m * n * eccentric_anomaly.sin()) / r;

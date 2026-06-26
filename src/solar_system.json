@@ -1,0 +1,503 @@
+{
+  "bodies": [
+    {
+      "name": "Sun",
+      "mass": 1.989e30,
+      "radius": 0.163,
+      "body_type": 0,
+      "orbit": null
+    },
+    {
+      "name": "Mercury",
+      "mass": 3.285e23,
+      "radius": 0.00057,
+      "body_type": 1,
+      "orbit": {
+        "a0": 0.38709927, "a_dot": 0.00000037,
+        "e0": 0.20563593, "e_dot": 0.00001906,
+        "i0": 7.00497902, "i_dot": -0.00594749,
+        "L0": 252.25032350, "L_dot": 149472.67411175,
+        "varpi0": 77.45779628, "varpi_dot": 0.16047689,
+        "omega0": 48.33076593, "omega_dot": -0.12534081
+      }
+    },
+    {
+      "name": "Venus",
+      "mass": 4.867e24,
+      "radius": 0.00142,
+      "body_type": 2,
+      "orbit": {
+        "a0": 0.72333566, "a_dot": 0.00000390,
+        "e0": 0.00677672, "e_dot": -0.00004107,
+        "i0": 3.39467605, "i_dot": -0.00078890,
+        "L0": 181.97909950, "L_dot": 58517.81538729,
+        "varpi0": 131.60246718, "varpi_dot": 0.00268329,
+        "omega0": 76.67984255, "omega_dot": -0.27769418
+      }
+    },
+    {
+      "name": "Earth",
+      "mass": 5.972e24,
+      "radius": 0.0015,
+      "body_type": 3,
+      "orbit": {
+        "a0": 1.00000261, "a_dot": 0.00000562,
+        "e0": 0.01671123, "e_dot": -0.00004392,
+        "i0": -0.00001531, "i_dot": -0.01294668,
+        "L0": 100.46457166, "L_dot": 35999.37244981,
+        "varpi0": 102.93768193, "varpi_dot": 0.32327364,
+        "omega0": 0.0, "omega_dot": 0.0
+      }
+    },
+    {
+      "name": "Mars",
+      "mass": 6.390e23,
+      "radius": 0.0008,
+      "body_type": 4,
+      "orbit": {
+        "a0": 1.52371034, "a_dot": 0.00001847,
+        "e0": 0.09339410, "e_dot": 0.00007882,
+        "i0": 1.84969142, "i_dot": -0.00813131,
+        "L0": -4.55343205, "L_dot": 19140.30268499,
+        "varpi0": -23.94362959, "varpi_dot": 0.44441088,
+        "omega0": 49.55953891, "omega_dot": -0.29257343
+      }
+    },
+    {
+      "name": "Jupiter",
+      "mass": 1.898e27,
+      "radius": 0.0168,
+      "body_type": 5,
+      "orbit": {
+        "a0": 5.20288700, "a_dot": -0.00011607,
+        "e0": 0.04838624, "e_dot": -0.00013253,
+        "i0": 1.30439695, "i_dot": -0.00183714,
+        "L0": 34.39644051, "L_dot": 3034.74612775,
+        "varpi0": 14.72847983, "varpi_dot": 0.21252668,
+        "omega0": 100.47390909, "omega_dot": 0.20469106
+      }
+    },
+    {
+      "name": "Saturn",
+      "mass": 5.683e26,
+      "radius": 0.0142,
+      "body_type": 6,
+      "orbit": {
+        "a0": 9.53667594, "a_dot": -0.00125060,
+        "e0": 0.05386179, "e_dot": -0.00050991,
+        "i0": 2.48599187, "i_dot": 0.00193609,
+        "L0": 49.95424423, "L_dot": 1222.49362201,
+        "varpi0": 92.59887831, "varpi_dot": -0.41897216,
+        "omega0": 113.66242448, "omega_dot": -0.28867794
+      }
+    },
+    {
+      "name": "Uranus",
+      "mass": 8.681e25,
+      "radius": 0.006,
+      "body_type": 7,
+      "orbit": {
+        "a0": 19.18916464, "a_dot": -0.00196176,
+        "e0": 0.04725744, "e_dot": -0.00004397,
+        "i0": 0.77263783, "i_dot": -0.00242939,
+        "L0": 313.23810451, "L_dot": 428.48202785,
+        "varpi0": 170.95427630, "varpi_dot": 0.40805281,
+        "omega0": 74.01692503, "omega_dot": 0.04240589
+      }
+    },
+    {
+      "name": "Neptune",
+      "mass": 1.024e26,
+      "radius": 0.0058,
+      "body_type": 8,
+      "orbit": {
+        "a0": 30.06992276, "a_dot": 0.00026291,
+        "e0": 0.00859048, "e_dot": 0.00005105,
+        "i0": 1.77004347, "i_dot": 0.00035372,
+        "L0": -55.12002969, "L_dot": 218.45945325,
+        "varpi0": 44.96476227, "varpi_dot": -0.32241464,
+        "omega0": 131.78422574, "omega_dot": -0.00508664
+      }
+    },
+    {
+      "name": "Pluto",
+      "mass": 1.303e22,
+      "radius": 0.00028,
+      "body_type": 10,
+      "orbit": {
+        "a0": 39.48168677, "a_dot": -0.00076912,
+        "e0": 0.24880766, "e_dot": 0.00006465,
+        "i0": 17.14175, "i_dot": 0.003075,
+        "L0": 238.92881, "L_dot": 145.20775,
+        "varpi0": 113.76329, "varpi_dot": -0.036736,
+        "omega0": 110.30347, "omega_dot": -0.010369
+      }
+    },
+    {
+      "name": "Ceres",
+      "mass": 9.393e20,
+      "radius": 0.00011,
+      "body_type": 11,
+      "orbit": {
+        "a0": 2.7653485, "a_dot": 0.0,
+        "e0": 0.07913825, "e_dot": 0.0,
+        "i0": 10.58682, "i_dot": 0.0,
+        "L0": 266.39345, "L_dot": 7827.78,
+        "varpi0": 152.98301, "varpi_dot": 0.0,
+        "omega0": 72.58981, "omega_dot": 0.0
+      }
+    },
+    {
+      "name": "Eris",
+      "mass": 1.66e22,
+      "radius": 0.00027,
+      "body_type": 15,
+      "orbit": {
+        "a0": 67.69, "a_dot": 0.0,
+        "e0": 0.44, "e_dot": 0.0,
+        "i0": 44.187, "i_dot": 0.0,
+        "L0": 32.79, "L_dot": 64.63,
+        "varpi0": 187.68, "varpi_dot": 0.0,
+        "omega0": 36.02, "omega_dot": 0.0
+      }
+    },
+    {
+      "name": "Haumea",
+      "mass": 4.006e21,
+      "radius": 0.0002,
+      "body_type": 16,
+      "orbit": {
+        "a0": 43.12, "a_dot": 0.0,
+        "e0": 0.196, "e_dot": 0.0,
+        "i0": 28.21, "i_dot": 0.0,
+        "L0": 219.42, "L_dot": 127.14,
+        "varpi0": 1.21, "varpi_dot": 0.0,
+        "omega0": 122.17, "omega_dot": 0.0
+      }
+    },
+    {
+      "name": "Makemake",
+      "mass": 3.1e21,
+      "radius": 0.00017,
+      "body_type": 17,
+      "orbit": {
+        "a0": 45.384, "a_dot": 0.0,
+        "e0": 0.1635, "e_dot": 0.0,
+        "i0": 29.034, "i_dot": 0.0,
+        "L0": 184.432, "L_dot": 117.75,
+        "varpi0": 16.015, "varpi_dot": 0.0,
+        "omega0": 79.261, "omega_dot": 0.0
+      }
+    }
+  ],
+  "asteroid_belt": {
+    "count": 150,
+    "semi_major_min": 2.2,
+    "semi_major_max": 3.2,
+    "body_type": 11
+  },
+  "moons": [
+    {
+      "name": "Moon",
+      "parent_name": "Earth",
+      "semi_major_axis": 384400000.0,
+      "eccentricity": 0.0549,
+      "inclination": 5.145,
+      "longitude_ascending_node": 125.08,
+      "argument_periapsis": 318.15,
+      "mean_anomaly_epoch": 135.27,
+      "radius_render": 0.0004,
+      "body_type": 11
+    },
+    {
+      "name": "Phobos",
+      "parent_name": "Mars",
+      "semi_major_axis": 9377000.0,
+      "eccentricity": 0.0151,
+      "inclination": 1.093,
+      "longitude_ascending_node": 25.0,
+      "argument_periapsis": 150.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00012,
+      "body_type": 11
+    },
+    {
+      "name": "Deimos",
+      "parent_name": "Mars",
+      "semi_major_axis": 23460000.0,
+      "eccentricity": 0.0002,
+      "inclination": 0.93,
+      "longitude_ascending_node": 35.0,
+      "argument_periapsis": 200.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00008,
+      "body_type": 11
+    },
+    {
+      "name": "Io",
+      "parent_name": "Jupiter",
+      "semi_major_axis": 421700000.0,
+      "eccentricity": 0.0041,
+      "inclination": 0.05,
+      "longitude_ascending_node": 45.0,
+      "argument_periapsis": 80.0,
+      "mean_anomaly_epoch": 20.0,
+      "radius_render": 0.00043,
+      "body_type": 2
+    },
+    {
+      "name": "Europa",
+      "parent_name": "Jupiter",
+      "semi_major_axis": 670900000.0,
+      "eccentricity": 0.009,
+      "inclination": 0.47,
+      "longitude_ascending_node": 135.0,
+      "argument_periapsis": 90.0,
+      "mean_anomaly_epoch": 180.0,
+      "radius_render": 0.00037,
+      "body_type": 7
+    },
+    {
+      "name": "Ganymede",
+      "parent_name": "Jupiter",
+      "semi_major_axis": 1070400000.0,
+      "eccentricity": 0.0013,
+      "inclination": 0.2,
+      "longitude_ascending_node": 210.0,
+      "argument_periapsis": 110.0,
+      "mean_anomaly_epoch": 45.0,
+      "radius_render": 0.00062,
+      "body_type": 11
+    },
+    {
+      "name": "Callisto",
+      "parent_name": "Jupiter",
+      "semi_major_axis": 1882700000.0,
+      "eccentricity": 0.0074,
+      "inclination": 0.2,
+      "longitude_ascending_node": 340.0,
+      "argument_periapsis": 25.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00057,
+      "body_type": 11
+    },
+    {
+      "name": "Mimas",
+      "parent_name": "Saturn",
+      "semi_major_axis": 185539000.0,
+      "eccentricity": 0.0202,
+      "inclination": 1.57,
+      "longitude_ascending_node": 10.0,
+      "argument_periapsis": 5.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00005,
+      "body_type": 11
+    },
+    {
+      "name": "Enceladus",
+      "parent_name": "Saturn",
+      "semi_major_axis": 237948000.0,
+      "eccentricity": 0.0047,
+      "inclination": 0.01,
+      "longitude_ascending_node": 20.0,
+      "argument_periapsis": 45.0,
+      "mean_anomaly_epoch": 120.0,
+      "radius_render": 0.00006,
+      "body_type": 15
+    },
+    {
+      "name": "Tethys",
+      "parent_name": "Saturn",
+      "semi_major_axis": 294619000.0,
+      "eccentricity": 0.0001,
+      "inclination": 1.12,
+      "longitude_ascending_node": 50.0,
+      "argument_periapsis": 90.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00013,
+      "body_type": 11
+    },
+    {
+      "name": "Dione",
+      "parent_name": "Saturn",
+      "semi_major_axis": 377396000.0,
+      "eccentricity": 0.0022,
+      "inclination": 0.02,
+      "longitude_ascending_node": 120.0,
+      "argument_periapsis": 150.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00013,
+      "body_type": 11
+    },
+    {
+      "name": "Rhea",
+      "parent_name": "Saturn",
+      "semi_major_axis": 527108000.0,
+      "eccentricity": 0.001,
+      "inclination": 0.33,
+      "longitude_ascending_node": 180.0,
+      "argument_periapsis": 240.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00018,
+      "body_type": 11
+    },
+    {
+      "name": "Titan",
+      "parent_name": "Saturn",
+      "semi_major_axis": 1221870000.0,
+      "eccentricity": 0.0288,
+      "inclination": 0.33,
+      "longitude_ascending_node": 270.0,
+      "argument_periapsis": 330.0,
+      "mean_anomaly_epoch": 60.0,
+      "radius_render": 0.00061,
+      "body_type": 2
+    },
+    {
+      "name": "Iapetus",
+      "parent_name": "Saturn",
+      "semi_major_axis": 3560820000.0,
+      "eccentricity": 0.0286,
+      "inclination": 7.57,
+      "longitude_ascending_node": 30.0,
+      "argument_periapsis": 120.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00017,
+      "body_type": 11
+    },
+    {
+      "name": "Miranda",
+      "parent_name": "Uranus",
+      "semi_major_axis": 129390000.0,
+      "eccentricity": 0.0013,
+      "inclination": 4.232,
+      "longitude_ascending_node": 100.0,
+      "argument_periapsis": 45.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00005,
+      "body_type": 11
+    },
+    {
+      "name": "Ariel",
+      "parent_name": "Uranus",
+      "semi_major_axis": 190900000.0,
+      "eccentricity": 0.0012,
+      "inclination": 0.26,
+      "longitude_ascending_node": 180.0,
+      "argument_periapsis": 90.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00013,
+      "body_type": 11
+    },
+    {
+      "name": "Umbriel",
+      "parent_name": "Uranus",
+      "semi_major_axis": 265986000.0,
+      "eccentricity": 0.004,
+      "inclination": 0.1,
+      "longitude_ascending_node": 250.0,
+      "argument_periapsis": 120.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00013,
+      "body_type": 11
+    },
+    {
+      "name": "Titania",
+      "parent_name": "Uranus",
+      "semi_major_axis": 436282000.0,
+      "eccentricity": 0.0012,
+      "inclination": 0.11,
+      "longitude_ascending_node": 310.0,
+      "argument_periapsis": 200.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00018,
+      "body_type": 11
+    },
+    {
+      "name": "Oberon",
+      "parent_name": "Uranus",
+      "semi_major_axis": 583449000.0,
+      "eccentricity": 0.0014,
+      "inclination": 0.15,
+      "longitude_ascending_node": 10.0,
+      "argument_periapsis": 300.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00017,
+      "body_type": 11
+    },
+    {
+      "name": "Triton",
+      "parent_name": "Neptune",
+      "semi_major_axis": 354759000.0,
+      "eccentricity": 0.00001,
+      "inclination": 156.8,
+      "longitude_ascending_node": 140.0,
+      "argument_periapsis": 220.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00032,
+      "body_type": 11
+    },
+    {
+      "name": "Charon",
+      "parent_name": "Pluto",
+      "semi_major_axis": 19591000.0,
+      "eccentricity": 0.0,
+      "inclination": 0.001,
+      "longitude_ascending_node": 0.0,
+      "argument_periapsis": 0.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00014,
+      "body_type": 11
+    }
+  ],
+  "satellites": [
+    {
+      "name": "ISS",
+      "parent_name": "Earth",
+      "semi_major_axis": 6791000.0,
+      "eccentricity": 0.0001,
+      "inclination": 51.64,
+      "longitude_ascending_node": 80.0,
+      "argument_periapsis": 0.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00008,
+      "body_type": 12
+    },
+    {
+      "name": "Starlink-1",
+      "parent_name": "Earth",
+      "semi_major_axis": 6921000.0,
+      "eccentricity": 0.0001,
+      "inclination": 53.0,
+      "longitude_ascending_node": 120.0,
+      "argument_periapsis": 45.0,
+      "mean_anomaly_epoch": 10.0,
+      "radius_render": 0.000015,
+      "body_type": 13
+    },
+    {
+      "name": "Starlink-2",
+      "parent_name": "Earth",
+      "semi_major_axis": 6921000.0,
+      "eccentricity": 0.0001,
+      "inclination": 53.0,
+      "longitude_ascending_node": 120.0,
+      "argument_periapsis": 45.0,
+      "mean_anomaly_epoch": 180.0,
+      "radius_render": 0.000015,
+      "body_type": 13
+    },
+    {
+      "name": "GPS-1",
+      "parent_name": "Earth",
+      "semi_major_axis": 26560000.0,
+      "eccentricity": 0.0002,
+      "inclination": 55.0,
+      "longitude_ascending_node": 240.0,
+      "argument_periapsis": 90.0,
+      "mean_anomaly_epoch": 0.0,
+      "radius_render": 0.00003,
+      "body_type": 14
+    }
+  ]
+}

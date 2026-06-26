@@ -72,6 +72,59 @@ pub struct AppState {
     realtime_speed: bool,
 }
 
+#[derive(serde::Deserialize)]
+struct BodyData {
+    name: String,
+    mass: f64,
+    radius: f32,
+    body_type: u32,
+    orbit: Option<crate::physics::kepler::KeplerElements>,
+}
+
+#[derive(serde::Deserialize)]
+struct AsteroidBeltData {
+    count: usize,
+    semi_major_min: f64,
+    semi_major_max: f64,
+    body_type: u32,
+}
+
+#[derive(serde::Deserialize)]
+struct MoonData {
+    name: String,
+    parent_name: String,
+    semi_major_axis: f64,
+    eccentricity: f64,
+    inclination: f64,
+    longitude_ascending_node: f64,
+    argument_periapsis: f64,
+    mean_anomaly_epoch: f64,
+    radius_render: f32,
+    body_type: u32,
+}
+
+#[derive(serde::Deserialize)]
+struct SatelliteData {
+    name: String,
+    parent_name: String,
+    semi_major_axis: f64,
+    eccentricity: f64,
+    inclination: f64,
+    longitude_ascending_node: f64,
+    argument_periapsis: f64,
+    mean_anomaly_epoch: f64,
+    radius_render: f32,
+    body_type: u32,
+}
+
+#[derive(serde::Deserialize)]
+struct SolarSystemData {
+    bodies: Vec<BodyData>,
+    asteroid_belt: AsteroidBeltData,
+    moons: Vec<MoonData>,
+    satellites: Vec<SatelliteData>,
+}
+
 impl AppState {
     pub async fn new(window: Arc<Window>) -> Result<Self> {
         info!("Initializing cross-platform wgpu context...");
@@ -231,62 +284,47 @@ impl AppState {
         self.current_jd = starting_jd;
 
         let au = 1.495978707e11_f64;
+        let g = 6.67430e-11_f64;
 
-        // Initialize Sun (index 0)
-        self.physics_engine.add_body(Vector3::zeros(), Vector3::zeros(), 1.989e30);
-        self.body_names.push("Sun".to_string());
-        self.body_radii.push(0.163);
-        self.body_types.push(0);
-        
-        let mut sun_trail = std::collections::VecDeque::with_capacity(1000);
-        for _ in 0..1000 {
-            sun_trail.push_back(Vector3::zeros());
-        }
-        self.history_trails.push(sun_trail);
+        // Load JSON configuration embedded at compile-time
+        const SOLAR_SYSTEM_JSON: &str = include_str!("solar_system.json");
+        let data: SolarSystemData = serde_json::from_str(SOLAR_SYSTEM_JSON)
+            .expect("Failed to parse solar_system.json");
 
-        let planet_periods = [
-            87.969,    // Mercury
-            224.701,   // Venus
-            365.256,   // Earth
-            686.980,   // Mars
-            4332.589,  // Jupiter
-            10759.22,  // Saturn
-            30688.5,   // Uranus
-            60182.0,   // Neptune
-        ];
+        let sun_mass = data.bodies[0].mass;
 
-        // Initialize planets 1 to 8 using J2000 Keplerian elements
-        for idx in 0..8 {
-            let (name, mass, radius, body_type) = match idx {
-                0 => ("Mercury", 3.285e23, 0.00057, 1),
-                1 => ("Venus", 4.867e24, 0.00142, 2),
-                2 => ("Earth", 5.972e24, 0.0015, 3),
-                3 => ("Mars", 6.390e23, 0.0008, 4),
-                4 => ("Jupiter", 1.898e27, 0.0168, 5),
-                5 => ("Saturn", 5.683e26, 0.0142, 6),
-                6 => ("Uranus", 8.681e25, 0.006, 7),
-                7 => ("Neptune", 1.024e26, 0.0058, 8),
-                _ => unreachable!(),
+        // Initialize Sun and planets/dwarf planets
+        for body in &data.bodies {
+            let (pos, vel) = if let Some(ref elements) = body.orbit {
+                crate::physics::kepler::get_orbit_state(elements, starting_jd, sun_mass)
+            } else {
+                (Vector3::zeros(), Vector3::zeros())
             };
 
-            let (pos, vel) = crate::physics::kepler::get_planet_state(idx, starting_jd);
-            
-            self.physics_engine.add_body(pos, vel, mass);
-            self.body_names.push(name.to_string());
-            self.body_radii.push(radius);
-            self.body_types.push(body_type);
-            
-            let period_days = planet_periods[idx];
+            self.physics_engine.add_body(pos, vel, body.mass);
+            self.body_names.push(body.name.clone());
+            self.body_radii.push(body.radius);
+            self.body_types.push(body.body_type);
+
             let mut trail = std::collections::VecDeque::with_capacity(1000);
-            for step_i in 0..1000 {
-                let jd_step = starting_jd - period_days + (step_i as f64 / 1000.0) * period_days;
-                let (pos_step, _) = crate::physics::kepler::get_planet_state(idx, jd_step);
-                let p_render = Vector3::new(
-                    (pos_step.x / au) as f32,
-                    (pos_step.y / au) as f32,
-                    (pos_step.z / au) as f32,
-                );
-                trail.push_back(p_render);
+            if let Some(ref elements) = body.orbit {
+                // Calculate orbital period dynamically: P_days = 365.256363 * a0^1.5
+                let period_days = 365.256363 * elements.a0.powf(1.5);
+                for step_i in 0..1000 {
+                    let jd_step = starting_jd - period_days + (step_i as f64 / 1000.0) * period_days;
+                    let (pos_step, _) = crate::physics::kepler::get_orbit_state(elements, jd_step, sun_mass);
+                    let p_render = Vector3::new(
+                        (pos_step.x / au) as f32,
+                        (pos_step.y / au) as f32,
+                        (pos_step.z / au) as f32,
+                    );
+                    trail.push_back(p_render);
+                }
+            } else {
+                // Sun (no orbit) gets a static trail at origin
+                for _ in 0..1000 {
+                    trail.push_back(Vector3::zeros());
+                }
             }
             self.history_trails.push(trail);
         }
@@ -298,21 +336,18 @@ impl AppState {
             (lcg_seed >> 32) as f64 / 4294967296.0
         };
 
-        let g = 6.67430e-11_f64;
-        let m_sun = 1.989e30_f64;
-        let au = 1.495978707e11_f64;
-
-        // 150 Asteroids (semi-major axis in [2.2, 3.2] AU, parent: Sun/0)
-        for k in 0..150 {
-            let a = (2.2 + next_rand() * 1.0) * au;
+        // Asteroid Belt from configuration
+        let belt = &data.asteroid_belt;
+        for k in 0..belt.count {
+            let a = (belt.semi_major_min + next_rand() * (belt.semi_major_max - belt.semi_major_min)) * au;
             let e = 0.01 + next_rand() * 0.15;
             let i = (next_rand() * 15.0).to_radians();
             let omega = (next_rand() * 360.0).to_radians();
             let arg_peri = (next_rand() * 360.0).to_radians();
             let m0 = (next_rand() * 360.0).to_radians();
-            
-            let period = 2.0 * std::f64::consts::PI * (a.powi(3) / (g * m_sun)).sqrt();
-            
+
+            let period = 2.0 * std::f64::consts::PI * (a.powi(3) / (g * sun_mass)).sqrt();
+
             self.keplerian_bodies.push(crate::physics::kepler::KeplerianBody {
                 name: format!("Asteroid-{}", k + 1),
                 parent_idx: 0,
@@ -325,88 +360,57 @@ impl AppState {
                 epoch_jd: starting_jd,
                 period,
                 radius_render: 0.00015 + (next_rand() as f32) * 0.00015,
-                body_type: 11,
+                body_type: belt.body_type,
             });
         }
 
-        // Earth Satellites (ISS, Starlink, GPS)
-        let g_m_earth = 6.67430e-11 * 5.972e24;
+        // Moons from configuration
+        for moon in &data.moons {
+            let parent_idx = data.bodies.iter().position(|b| b.name == moon.parent_name).unwrap_or(0);
+            let parent_mass = data.bodies.get(parent_idx).map(|b| b.mass).unwrap_or(5.972e24);
 
-        // 1. ISS (altitude ~420 km)
-        let iss_a = 6791000.0_f64;
-        let iss_period = 2.0 * std::f64::consts::PI * (iss_a.powi(3) / g_m_earth).sqrt();
-        self.keplerian_bodies.push(crate::physics::kepler::KeplerianBody {
-            name: "ISS".to_string(),
-            parent_idx: 3,
-            semi_major_axis: iss_a,
-            eccentricity: 0.0001,
-            inclination: 51.64_f64.to_radians(),
-            longitude_ascending_node: 80.0_f64.to_radians(),
-            argument_periapsis: 0.0,
-            mean_anomaly_epoch: 0.0,
-            epoch_jd: starting_jd,
-            period: iss_period,
-            radius_render: 0.00008,
-            body_type: 12,
-        });
+            let period = 2.0 * std::f64::consts::PI * (moon.semi_major_axis.powi(3) / (g * parent_mass)).sqrt();
 
-        // 2. Starlink satellites (20 satellites in 2 planes)
-        let starlink_a = 6921000.0_f64;
-        let starlink_period = 2.0 * std::f64::consts::PI * (starlink_a.powi(3) / g_m_earth).sqrt();
-        for k in 0..10 {
-            // Plane 1
             self.keplerian_bodies.push(crate::physics::kepler::KeplerianBody {
-                name: format!("Starlink-1A-{}", k + 1),
-                parent_idx: 3,
-                semi_major_axis: starlink_a,
-                eccentricity: 0.0001,
-                inclination: 53.0_f64.to_radians(),
-                longitude_ascending_node: 45.0_f64.to_radians(),
-                argument_periapsis: 0.0,
-                mean_anomaly_epoch: (k as f64 * 36.0).to_radians(),
+                name: moon.name.clone(),
+                parent_idx,
+                semi_major_axis: moon.semi_major_axis,
+                eccentricity: moon.eccentricity,
+                inclination: moon.inclination.to_radians(),
+                longitude_ascending_node: moon.longitude_ascending_node.to_radians(),
+                argument_periapsis: moon.argument_periapsis.to_radians(),
+                mean_anomaly_epoch: moon.mean_anomaly_epoch.to_radians(),
                 epoch_jd: starting_jd,
-                period: starlink_period,
-                radius_render: 0.000015,
-                body_type: 13,
-            });
-            // Plane 2
-            self.keplerian_bodies.push(crate::physics::kepler::KeplerianBody {
-                name: format!("Starlink-2B-{}", k + 1),
-                parent_idx: 3,
-                semi_major_axis: starlink_a,
-                eccentricity: 0.0001,
-                inclination: 53.0_f64.to_radians(),
-                longitude_ascending_node: 135.0_f64.to_radians(),
-                argument_periapsis: 0.0,
-                mean_anomaly_epoch: (k as f64 * 36.0 + 18.0).to_radians(),
-                epoch_jd: starting_jd,
-                period: starlink_period,
-                radius_render: 0.000015,
-                body_type: 13,
+                period,
+                radius_render: moon.radius_render,
+                body_type: moon.body_type,
             });
         }
 
-        // 3. GPS satellites (6 satellites in 6 planes)
-        let gps_a = 26571000.0_f64;
-        let gps_period = 2.0 * std::f64::consts::PI * (gps_a.powi(3) / g_m_earth).sqrt();
-        for k in 0..6 {
+        // Satellites from configuration
+        for sat in &data.satellites {
+            let parent_idx = data.bodies.iter().position(|b| b.name == sat.parent_name).unwrap_or(0);
+            let parent_mass = data.bodies.get(parent_idx).map(|b| b.mass).unwrap_or(5.972e24);
+
+            let period = 2.0 * std::f64::consts::PI * (sat.semi_major_axis.powi(3) / (g * parent_mass)).sqrt();
+
             self.keplerian_bodies.push(crate::physics::kepler::KeplerianBody {
-                name: format!("GPS-{}", k + 1),
-                parent_idx: 3,
-                semi_major_axis: gps_a,
-                eccentricity: 0.01,
-                inclination: 55.0_f64.to_radians(),
-                longitude_ascending_node: (k as f64 * 60.0).to_radians(),
-                argument_periapsis: 0.0,
-                mean_anomaly_epoch: (k as f64 * 45.0).to_radians(),
+                name: sat.name.clone(),
+                parent_idx,
+                semi_major_axis: sat.semi_major_axis,
+                eccentricity: sat.eccentricity,
+                inclination: sat.inclination.to_radians(),
+                longitude_ascending_node: sat.longitude_ascending_node.to_radians(),
+                argument_periapsis: sat.argument_periapsis.to_radians(),
+                mean_anomaly_epoch: sat.mean_anomaly_epoch.to_radians(),
                 epoch_jd: starting_jd,
-                period: gps_period,
-                radius_render: 0.00003,
-                body_type: 14,
+                period,
+                radius_render: sat.radius_render,
+                body_type: sat.body_type,
             });
         }
 
-        self.selected_body_idx = 3; // Earth
+        self.selected_body_idx = data.bodies.iter().position(|b| b.name == "Earth").unwrap_or(3);
         self.camera_distance = 18.0;
         self.camera_target = Vector3::zeros();
         self.follow_camera = false;
@@ -553,7 +557,22 @@ impl AppState {
         let mut body_types = self.body_types.clone();
 
         // Calculate Keplerian bodies' render positions
-        let physical_radii = [6.9634e8, 2.4397e6, 6.0518e6, 6.371e6, 3.3895e6, 6.9911e7, 5.8232e7, 2.5362e7, 2.4622e7];
+        let physical_radii = [
+            6.9634e8,  // Sun
+            2.4397e6,  // Mercury
+            6.0518e6,  // Venus
+            6.371e6,   // Earth
+            3.3895e6,  // Mars
+            6.9911e7,  // Jupiter
+            5.8232e7,  // Saturn
+            2.5362e7,  // Uranus
+            2.4622e7,  // Neptune
+            1.1883e6,  // Pluto
+            4.73e5,    // Ceres
+            1.163e6,   // Eris
+            8.16e5,    // Haumea
+            7.15e5,    // Makemake
+        ];
         for body in &self.keplerian_bodies {
             let parent_pos = base_positions.get(body.parent_idx).copied().unwrap_or(Vector3::zeros());
             let parent_vel = base_velocities.get(body.parent_idx).copied().unwrap_or(Vector3::zeros());
@@ -918,7 +937,22 @@ impl AppState {
                         } else {
                             let parent_name = body_names.get(k_body.parent_idx).cloned().unwrap_or("Unknown".to_string());
                             ui.text(format!("Parent: {}", parent_name));
-                            let physical_radii = [6.9634e8, 2.4397e6, 6.0518e6, 6.371e6, 3.3895e6, 6.9911e7, 5.8232e7, 2.5362e7, 2.4622e7];
+                            let physical_radii = [
+                                6.9634e8,  // Sun
+                                2.4397e6,  // Mercury
+                                6.0518e6,  // Venus
+                                6.371e6,   // Earth
+                                3.3895e6,  // Mars
+                                6.9911e7,  // Jupiter
+                                5.8232e7,  // Saturn
+                                2.5362e7,  // Uranus
+                                2.4622e7,  // Neptune
+                                1.1883e6,  // Pluto
+                                4.73e5,    // Ceres
+                                1.163e6,   // Eris
+                                8.16e5,    // Haumea
+                                7.15e5,    // Makemake
+                            ];
                             let parent_radius = physical_radii.get(k_body.parent_idx).copied().unwrap_or(6371000.0);
                             let alt_km = (k_body.semi_major_axis - parent_radius) / 1000.0;
                             ui.text(format!("Altitude: {:.1} km", alt_km));
@@ -1142,10 +1176,14 @@ impl AppState {
                 6 => [0.9, 0.8, 0.6, 1.0],
                 7 => [0.5, 0.8, 0.9, 1.0],
                 8 => [0.2, 0.4, 0.9, 1.0],
+                10 => [0.7, 0.5, 0.45, 1.0],
                 11 => [0.5, 0.45, 0.4, 1.0],
                 12 => [0.9, 0.9, 0.9, 1.0],
                 13 => [0.3, 0.75, 1.0, 1.0],
                 14 => [1.0, 0.8, 0.2, 1.0],
+                15 => [0.85, 0.88, 0.9, 1.0],
+                16 => [0.8, 0.82, 0.85, 1.0],
+                17 => [0.65, 0.28, 0.15, 1.0],
                 100 => [0.9, 0.4, 0.2, 1.0],
                 _ => [0.4, 0.6, 0.8, 1.0],
             };
